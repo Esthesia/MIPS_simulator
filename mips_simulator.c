@@ -168,7 +168,7 @@ void ID(){
       ID_EX.jump_control = TRUE;
       ID_EX.ex_control.PCSrc = TRUE;
       // when register 31(RA) does not come back - how to deal with 20200507
-      ID_EX.ID_pc_num = reg[31];
+      ID_EX.ID_pc_num = reg[30];
       return;
     }
     else{
@@ -189,7 +189,7 @@ void ID(){
   else if(op_code == 2 || op_code == 3){
     unsigned int ID_jump_address = (ID_INST << 6) >> 6;
     if(opcode == 3){
-      reg[31] = IF_ID.IF_pc_num;
+      reg[30] = IF_ID.IF_pc_num;
     }
     ID_EX.ID_pc_num = ID_EX.jump_address;
     ID_EX.jump_control = TRUE;
@@ -222,6 +222,31 @@ void ID(){
     ID_EX.ex_control.MemWrite = FALSE;
     ID_EX.ex_control.regWrite = TRUE;
     ID_EX.ex_control.MemtoReg = FALSE;
+    return;
   }
-
+  /*
+    Load instruction
+   */
+  else if(op_code == 15 || op_code == 32 || op_code == 33 || op_code == 35 || op_code == 36 || op_code == 37){
+    ID_EX.jump_control = FALSE;
+    ID_EX.ex_control.regDst = FALSE;
+    ID_EX.ex_control.ALUSrc = TRUE;
+    ID_EX.ex_control.PCSrc = FALSE;
+    ID_EX.ex_control.MemRead = TRUE;
+    ID_EX.ex_control.MemWrite = FALSE;
+    ID_EX.ex_control.regWrite = TRUE;
+    ID_EX.ex_control.MemtoReg = TRUE;
+    return;
+  }
+  else if(op_code == 40 || op_code == 41 || op_code == 43){
+    ID_EX.jump_control = FALSE;
+    // ID_EX.ex_control.regDst = FALSE;
+    ID_EX.ex_control.ALUSrc = TRUE;
+    ID_EX.ex_control.PCSrc = FALSE;
+    ID_EX.ex_control.MemRead = FALSE;
+    ID_EX.ex_control.MemWrite = TRUE;
+    ID_EX.ex_control.regWrite = FALSE;
+    // ID_EX.ex_control.MemtoReg = FALSE;
+    return;
+  }
 }
