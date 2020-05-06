@@ -157,9 +157,8 @@ void ID(){
   ID_EX.rt_value = reg[rt-1];
   ID_EX.RT = rt;
   ID_EX.RD = rd;
-  ID_EX.extension_num = immediate_num;
+  ID_EX.extension_num = signExtension(immediate_num);
   ID_EX.jump_address = (ID_INST << 6) >> 6;
-
 
   if(op_code == RTYPE)
   {
@@ -167,20 +166,30 @@ void ID(){
     // JR instruction - need to end at ID/EX structure
     if(funct_code == 8){
       ID_EX.jump_control = TRUE;
-      ID_EX.ID_pc_num = reg[30];
+      ID_EX.ex_control.PCSrc = TRUE;
+      // when register 31(RA) does not come back - how to deal with 20200507
+      ID_EX.ID_pc_num = reg[31];
       return;
     }
     else{
-
+      ID_EX.jump_control = FALSE;
+      ID_EX.ex_control.regDst = TRUE;
+      ID_EX.ex_control.ALUSrc = FALSE;
+      ID_EX.ex_control.PCSrc = FALSE;
+      ID_EX.ex_control.MemRead = FALSE;
+      ID_EX.ex_control.MemWrite = FALSE;
+      ID_EX.ex_control.regWrite = TRUE;
+      ID_EX.ex_control.MemtoReg = FALSE;
+      return;
     }
   }
   /*
-    J-TYPE
+    J-TYPE  - need to make a bubble of next IF -20200507
    */
-  else if(opcode == 2 || opcode == 3){
+  else if(op_code == 2 || op_code == 3){
     unsigned int ID_jump_address = (ID_INST << 6) >> 6;
     if(opcode == 3){
-      reg[30] = IF_ID.IF_pc_num;
+      reg[31] = IF_ID.IF_pc_num;
     }
     ID_EX.ID_pc_num = ID_EX.jump_address;
     ID_EX.jump_control = TRUE;
@@ -188,8 +197,31 @@ void ID(){
   }
   /*
     Branch instruction
+    comment sidd - regDst and MemtoReg is don't care condition
    */
-  else if(opcode == 4 || opcode == 5){
-
+  else if(op_code == 4 || op_code == 5){
+    ID_EX.jump_control = FALSE;
+    // ID_EX.ex_control.regDst = TRUE;
+    ID_EX.ex_control.ALUSrc = FALSE;
+    ID_EX.ex_control.PCSrc = TRUE;
+    ID_EX.ex_control.MemRead = FALSE;
+    ID_EX.ex_control.MemWrite = FALSE;
+    ID_EX.ex_control.regWrite = FALSE;
+    // ID_EX.ex_control.MemtoReg = FALSE;
+    return;
   }
+  /*
+    ALU immediate operation
+   */
+  else if(op_code == 8 || op_code == 10 || op_code == 11 || op_code == 12 || op_code == 13){
+    ID_EX.jump_control = FALSE;
+    ID_EX.ex_control.regDst = FALSE;
+    ID_EX.ex_control.ALUSrc = TRUE;
+    ID_EX.ex_control.PCSrc = FALSE;
+    ID_EX.ex_control.MemRead = FALSE;
+    ID_EX.ex_control.MemWrite = FALSE;
+    ID_EX.ex_control.regWrite = TRUE;
+    ID_EX.ex_control.MemtoReg = FALSE;
+  }
+
 }
