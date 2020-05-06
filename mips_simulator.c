@@ -8,20 +8,19 @@
 
 int reg[32];
 
-typedef struct __status {
-  int cur_cycle;
-  int cur_PC;
-  unsigned cur_instruction;
-  int cur_reg[32];
-  // MEMORY I/O need to be implemented
-} status;
+_IF_ID IF_ID;
+_ID_EX ID_EX;
+_EX_MEM EX_MEM;
+_MEM_WB MEM_WB;
+status cur_status;
+
 
 void WB(void);
 void MEM(void);
 void EX(void);
 void ID(void);
-void IF(status);
-void print_status(status);
+void IF(void);
+void print_status(unsigned int inst[], int pc);
 
 char *register_print(int reg_num, int reg_val){
   char print_form[8];
@@ -55,7 +54,7 @@ int code_execution(int code[], int mode, int program_counter){
       MEM();
       EX();
       ID();
-      IF(cur_status);
+      IF(code[], program_counter);
       int reg_iter;
       for(reg_iter = 0; reg_iter < 32; reg_iter++){
         cur_status.reg[reg_iter] = reg[reg_iter];
@@ -98,6 +97,9 @@ int main(int argc, char *argv[]){
   unsigned int *instruction = (unsigned int*)malloc(sizeof(unsigned int)*number_of_instruction);
   code_insertion(instruction_file, instruction);
   fclose(instruction_file);
+  /*
+    Register file initialization
+   */
   int register_iter;
   for(register_iter = 0; register_iter < 32; register_iter ++){
      reg[register_iter] = 0;
@@ -125,7 +127,7 @@ int main(int argc, char *argv[]){
   return 0;
 }
 
-void print_status(status){
+void print_status(){
   printf("Cycle &d\n",status.cur_cycle);
   printf("PC: %04x\n",status.cur_PC);
   printf("Instruction: %08x\n\n",status.cur_instruction);
@@ -137,6 +139,57 @@ void print_status(status){
   printf("Memory I/O: "); // not yet implemented
 }
 
-void IF(status){
+void IF(unsigned int inst[], int pc){
+  unsigned int IF_UNIT = inst[pc];
+  IF_ID.IF_pc_num = pc + 1;
+  IF_ID.instruction = IF_UNIT;
+  return;
+}
 
+void ID(){
+  unsigned int ID_INST = IF_ID.instruction;
+  unsigned int op_code = ID_INST >> 26;
+  unsigned int rs = (ID_INST << 6) >> 27;
+  unsigned int rt = (ID_INST << 11) >> 27;
+  unsigned int rd = (ID_INST << 16) >> 27;
+  unsigned int immediate_num = (ID_INST << 16) >> 16;
+  ID_EX.rs_value = reg[rs-1];
+  ID_EX.rt_value = reg[rt-1];
+  ID_EX.RT = rt;
+  ID_EX.RD = rd;
+  ID_EX.extension_num = immediate_num;
+  ID_EX.jump_address = (ID_INST << 6) >> 6;
+
+
+  if(op_code == RTYPE)
+  {
+    unsigned int funct_code = (ID_INST << 26) >> 26;
+    // JR instruction - need to end at ID/EX structure
+    if(funct_code == 8){
+      ID_EX.jump_control = TRUE;
+      ID_EX.ID_pc_num = reg[30];
+      return;
+    }
+    else{
+
+    }
+  }
+  /*
+    J-TYPE
+   */
+  else if(opcode == 2 || opcode == 3){
+    unsigned int ID_jump_address = (ID_INST << 6) >> 6;
+    if(opcode == 3){
+      reg[30] = IF_ID.IF_pc_num;
+    }
+    ID_EX.ID_pc_num = ID_EX.jump_address;
+    ID_EX.jump_control = TRUE;
+    return;
+  }
+  /*
+    Branch instruction
+   */
+  else if(opcode == 4 || opcode == 5){
+
+  }
 }
