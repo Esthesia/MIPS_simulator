@@ -164,9 +164,10 @@ void ID(){
   ID_EX.RD = rd;
   ID_EX.extension_num = signExtension(immediate_num);
   ID_EX.jump_address = (ID_INST << 6) >> 6;
-
-  if(op_code == RTYPE)
-  {
+  /*
+    R-TYPE
+   */
+  if(op_code == RTYPE){
     unsigned int funct_code = (ID_INST << 26) >> 26;
     // JR instruction - need to end at ID/EX structure
     if(funct_code == 8){
@@ -208,13 +209,13 @@ void ID(){
    */
   else if(op_code == 4 || op_code == 5){
     ID_EX.jump_control = FALSE;
-    // ID_EX.ex_control.regDst = TRUE;
+    ID_EX.ex_control.regDst = FALSE;
     ID_EX.ex_control.ALUSrc = FALSE;
     ID_EX.ex_control.PCSrc = TRUE;
     ID_EX.ex_control.MemRead = FALSE;
     ID_EX.ex_control.MemWrite = FALSE;
     ID_EX.ex_control.regWrite = FALSE;
-    // ID_EX.ex_control.MemtoReg = FALSE;
+    ID_EX.ex_control.MemtoReg = FALSE;
     ID_EX.ex_control.ALUop_0 = TRUE;
     ID_EX.ex_control.ALUop_1 = FALSE;
     return;
@@ -251,6 +252,9 @@ void ID(){
     ID_EX.ex_control.ALUop_1 = FALSE;
     return;
   }
+  /*
+    save instruction
+   */
   else if(op_code == 40 || op_code == 41 || op_code == 43){
     ID_EX.jump_control = FALSE;
     // ID_EX.ex_control.regDst = FALSE;
@@ -267,11 +271,24 @@ void ID(){
 }
 
 void EX(){
+  if(jump_control){
+    EX_MEM.mem_control.PCSrc = ID_EX.ex_control.PCSrc;
+    EX_MEM.mem_control.MemRead = FALSE;
+    EX_MEM.mem_control.MemWrite = FALSE;
+    EX_MEM.mem_control.regWrite = FALSE;
+    EX_MEM.mem_control.MemtoReg = FALSE;
+  }
+  /*
+    Control value assigning
+   */
   EX_MEM.mem_control.PCSrc = ID_EX.ex_control.PCSrc;
   EX_MEM.mem_control.MemRead = ID_EX.ex_control.MemRead;
   EX_MEM.mem_control.MemWrite = ID_EX.ex_control.MemWrite;
   EX_MEM.mem_control.regWrite = ID_EX.ex_control.regWrite;
   EX_MEM.mem_control.MemtoReg = ID_EX.ex_control.MemtoReg;
+  /*
+    Assigning Data to next step
+   */
   EX_MEM.EX_pc_num = ID_EX.ID_pc_num;
   EX_MEM.EX_op_code = ID_EX.ID_op_code;
   unsigned int branch_destination = ID_EX.extension_num;
@@ -282,7 +299,10 @@ void EX(){
   int ALU_control_output = ALU_control(funct, ex_op, ID_EX.ex_control.ALUop_0, ID_EX.ex_control.ALUop_1);
   int ALU_input_1 = ID_EX.rs_value;
   int ALU_input_2 = ID_EX.rt_value;
-  // ALUSrc control MUX if ALUSrc true, using signExtension. Otherwise use rt_value from ID_EX
+  /*
+    ALUSrc control MUX if ALUSrc true, using signExtension.
+    Otherwise use rt_value from ID_EX
+   */
   if(ID_EX.ex_control.ALUSrc)
     ALU_input_2 = ID_EX.extension_num;
   int ALU_output = ALU_execute(funct, shamt, ALU_control_output, ALU_input_1, ALU_input_2);
@@ -293,6 +313,55 @@ void EX(){
   EX_MEM.ALU_result = ALU_output;
   EX_MEM.num_reg_to_write = decision_RegDst;
 }
+
+void MEM(){
+  // no memory accessing occurs - Rtype
+  if(!EX_MEM.mem_control.MemRead && !EX_MEM.mem_control.MemWrite){
+    // All control value are zero == no need to MEM and WB stage
+    if(!EX_MEM.mem_control.regWrite){
+      MEM_WB.writeback_control.regWrite = FALSE;
+      MEM_WB.writeback_control.MemtoReg = FALSE;
+      return;
+    }
+    // no memory I/O
+    else{
+      MEM_WB.writeback_control.regWrite = TRUE;
+      MEM_WB.writeback_control.MemtoReg = FALSE;
+      MEM_WB.mem_data = 0;
+      MEM_WB.ALU_result = EX_MEM.ALU_result;
+      MEM_WB.rd_num = EX_MEM.num_reg_to_write;
+      return;
+    }
+  }
+  /*
+    Memory Load instruction
+   */
+  else if(EX_MEM.mem_control.MemRead){
+
+  }
+  /*
+    Memory Save instruction
+   */
+  else if(EX_MEM.mem_control.MemWrite){
+
+  }
+}
+
+void WB(){
+  /*
+    No Register Write == No need to process WB stage
+   */
+  if(!MEM_WB.writeback_control.regWrite){
+    return;
+  }
+  else{
+    if(Mem_WB.writeback_control.MemtoReg){
+
+    }
+
+  }
+}
+
 /*
   ALU Controller return value
    0000 - AND 0
@@ -383,7 +452,9 @@ int ALU_control(unsigned int function_code, int op, bool op_0, bool op_1){
     }
   }
 }
-
+/*
+  ALU executor according to ALU control value
+ */
 int ALU_execute(unsigned int f_code, unsigned int shift_num, int ALU_con, int read_data_1, int read_data_2){
   int execution_output;
   EX_MEM.zero_flag = FALSE;
@@ -433,11 +504,4 @@ int ALU_execute(unsigned int f_code, unsigned int shift_num, int ALU_con, int re
     execution_output = ~(read_data_1 | read_data_2);
     return execution_output;
   }
-}
-
-void MEM(){
-  return;
-}
-void WB(){
-  return;
 }
