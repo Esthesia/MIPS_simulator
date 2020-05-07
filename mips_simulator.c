@@ -315,6 +315,7 @@ void EX(){
 }
 
 void MEM(){
+  int IO_size;
   // no memory accessing occurs - Rtype
   if(!EX_MEM.mem_control.MemRead && !EX_MEM.mem_control.MemWrite){
     // All control value are zero == no need to MEM and WB stage
@@ -337,28 +338,72 @@ void MEM(){
     Memory Load instruction
    */
   else if(EX_MEM.mem_control.MemRead){
+    if(EX_MEM.EX_op_code == 32){
+      IO_size = 8;
 
+    }
+    else if(EX_MEM.EX_op_code == 36){
+      IO_size = 8;
+
+    }
+    else if(EX_MEM.EX_op_code == 33){
+      IO_size = 16;
+
+    }
+    else if(EX_MEM.EX_op_code == 37){
+      IO_size = 16;
+
+    }
+    else if(EX_MEM.EX_op_code == 35){
+      IO_size = 32;
+
+    }
   }
   /*
     Memory Save instruction
    */
   else if(EX_MEM.mem_control.MemWrite){
+    if(EX_MEM.EX_op_code == 40){
+      IO_size = 8;
 
+    }
+    else if(EX_MEM.EX_op_code == 41){
+      IO_size = 16;
+
+    }
+    else if(EX_MEM.EX_op_code == 43){
+      IO_size = 32;
+
+    }
   }
 }
 
 void WB(){
+  int destination_register = MEM_WB.rd_num;
   /*
     No Register Write == No need to process WB stage
    */
   if(!MEM_WB.writeback_control.regWrite){
     return;
   }
+  /*
+    Register Write
+   */
   else{
+    /*
+      Memory Data to target Register
+     */
     if(Mem_WB.writeback_control.MemtoReg){
-
+      reg[destination_register-1] = MEM_WB.mem_data;
+      return;
     }
-
+    /*
+      Arithmetic result to target Register
+     */
+    else{
+      reg[destination_register-1] = MEM_WB.ALU_result;
+      return;
+    }
   }
 }
 
