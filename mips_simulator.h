@@ -1,6 +1,6 @@
-// typedef enum {false, true} bool;
+typedef enum {FALSE, TRUE} bool;
 
-typedef __EX_CONTROL {
+typedef struct __EX_CONTROL {
   bool regDst;
   bool ALUSrc;
   bool PCSrc;
@@ -8,9 +8,11 @@ typedef __EX_CONTROL {
   bool MemWrite;
   bool regWrite;
   bool MemtoReg;
+  bool ALUop_0;
+  bool ALUop_1;
 } EX_CON;
 
-typedef __MEM_CONTROL {
+typedef struct __MEM_CONTROL {
   bool PCSrc;
   bool MemRead;
   bool MemWrite;
@@ -18,7 +20,7 @@ typedef __MEM_CONTROL {
   bool MemtoReg;
 } MEM_CON;
 
-typedef __WB_CONTROL {
+typedef struct __WB_CONTROL {
   bool regWrite;
   bool MemtoReg;
 } WB_CON;
@@ -31,18 +33,20 @@ typedef struct __IF_ID {
 typedef struct __ID_EX {
   EX_CON ex_control;
   unsigned int ID_pc_num;
+  int ID_op_code;
   int rs_value;
   int rt_value;
   int RT;
   int RD;
   int extension_num;
   bool jump_control;
-  unsigned int jump_address; //
+  unsigned int jump_address;
 } _ID_EX;
 
 typedef struct __EX_MEM {
   MEM_CON mem_control;
   unsigned int EX_pc_num;
+  int EX_op_code;
   int ALU_result;
   bool zero_flag;
   int num_reg_to_write;
