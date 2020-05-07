@@ -54,9 +54,10 @@ typedef struct __EX_MEM {
 
 typedef struct __MEM_WB {
   WB_CON writeback_control;
+  int size_of_IO;
   int mem_data;
   int ALU_result;
-  int num_reg__to_wirte;
+  int rd_num;
 } _MEM_WB;
 
 typedef struct __status {
