@@ -118,11 +118,11 @@ int main(int argc, char *argv[]){
   /*
     just for debugging
    */
-  int i;
-  for(i = 0; i < file_size; i++){
-    printf("Cycle %d\n", i+1);
-    printf("%08x\n\n", instruction[i]);
-  }
+  // int i;
+  // for(i = 0; i < file_size; i++){
+  //   printf("Cycle %d\n", i+1);
+  //   printf("%08x\n\n", instruction[i]);
+  // }
   /*
   code execution
    */
