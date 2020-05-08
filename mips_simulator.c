@@ -173,6 +173,8 @@ void ID(){
   ID_EX.jump_address = (ID_INST << 6) >> 6;
   /*
     R-TYPE
+    When function code is 8(JAL), jump control goes to true
+    Otherwise, Normal R-type control unit.
    */
   if(op_code == RTYPE){
     unsigned int funct_code = (ID_INST << 26) >> 26;
@@ -212,7 +214,7 @@ void ID(){
   }
   /*
     Branch instruction
-    comment sidd - regDst and MemtoReg is don't care condition
+    comment - regDst and MemtoReg is don't care condition
    */
   else if(op_code == 4 || op_code == 5){
     ID_EX.jump_control = FALSE;
