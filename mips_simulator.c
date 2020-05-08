@@ -8,6 +8,13 @@
 #define RTYPE 0
 
 int reg[32];
+/*
+  Memory Space
+  1000 0000(hex)
+  1000 8000(hex)
+  So 8192 int array as simulating static memory space.
+ */
+int static_memory[8192];
 int program_counter = 0;
 
 _IF_ID IF_ID;
@@ -158,8 +165,8 @@ void ID(){
   unsigned int rd = (ID_INST << 16) >> 27;
   unsigned int immediate_num = (ID_INST << 16) >> 16;
   ID_EX.ID_op_code = op_code;
-  ID_EX.rs_value = reg[rs-1];
-  ID_EX.rt_value = reg[rt-1];
+  ID_EX.rs_value = reg[rs];
+  ID_EX.rt_value = reg[rt];
   ID_EX.RT = rt;
   ID_EX.RD = rd;
   ID_EX.extension_num = signExtension(immediate_num);
@@ -174,7 +181,7 @@ void ID(){
       ID_EX.jump_control = TRUE;
       ID_EX.ex_control.PCSrc = TRUE;
       // when register 31(RA) does not come back - how to deal with 20200507
-      ID_EX.ID_pc_num = reg[30];
+      ID_EX.ID_pc_num = reg[31];
       return;
     }
     else{
@@ -197,7 +204,7 @@ void ID(){
   else if(op_code == 2 || op_code == 3){
     unsigned int ID_jump_address = (ID_INST << 6) >> 6;
     if(op_code == 3){
-      reg[30] = IF_ID.IF_pc_num;
+      reg[31] = IF_ID.IF_pc_num;
     }
     ID_EX.ID_pc_num = ID_EX.jump_address;
     ID_EX.jump_control = TRUE;
@@ -271,7 +278,7 @@ void ID(){
 }
 
 void EX(){
-  if(jump_control){
+  if(ID_EX.jump_control){
     EX_MEM.mem_control.PCSrc = ID_EX.ex_control.PCSrc;
     EX_MEM.mem_control.MemRead = FALSE;
     EX_MEM.mem_control.MemWrite = FALSE;
@@ -291,6 +298,7 @@ void EX(){
    */
   EX_MEM.EX_pc_num = ID_EX.ID_pc_num;
   EX_MEM.EX_op_code = ID_EX.ID_op_code;
+  EX_MEM.write_data = ID_EX.rt_value;
   unsigned int branch_destination = ID_EX.extension_num;
   unsigned int funct = ((unsigned int)ID_EX.extension_num << 26) >> 26;
   unsigned int shamt = ((unsigned int)ID_EX.extension_num << 21) >> 27;
@@ -306,7 +314,7 @@ void EX(){
   if(ID_EX.ex_control.ALUSrc)
     ALU_input_2 = ID_EX.extension_num;
   int ALU_output = ALU_execute(funct, shamt, ALU_control_output, ALU_input_1, ALU_input_2);
-  if(RegDst)
+  if(ID_EX.ex_control.regDst)
     decision_RegDst = ID_EX.RD;
   else
     decision_RegDst = ID_EX.RT;
@@ -315,7 +323,11 @@ void EX(){
 }
 
 void MEM(){
+  // IO_size unit of bits
   int IO_size;
+  int memory_address = EX_MEM.ALU_result / 4;
+  int access_point = EX_MEM.ALU_result % 4;
+  int temp_mem_val;
   // no memory accessing occurs - Rtype
   if(!EX_MEM.mem_control.MemRead && !EX_MEM.mem_control.MemWrite){
     // All control value are zero == no need to MEM and WB stage
@@ -336,44 +348,158 @@ void MEM(){
   }
   /*
     Memory Load instruction
+    Int Array is Big Endian but this simulator access data as Little Endian (alligned)
+    Access Policy - Reverse accessing.
    */
   else if(EX_MEM.mem_control.MemRead){
+    MEM_WB.writeback_control.regWrite = TRUE;
+    MEM_WB.writeback_control.MemtoReg = TRUE;
+    MEM_WB.ALU_result = EX_MEM.ALU_result;
+    MEM_WB.rd_num = EX_MEM.num_reg_to_write;
     if(EX_MEM.EX_op_code == 32){
       IO_size = 8;
-
+      temp_mem_val = static_memory[memory_address];
+      // 0 : access Most significant byte - 3: access Least significant byte
+      if(access_point == 0){
+        MEM_WB.mem_data = temp_mem_val >> 24;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
+      else if(access_point == 1){
+        MEM_WB.mem_data = (temp_mem_val << 8) >> 24;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
+      else if(access_point == 2){
+        MEM_WB.mem_data = (temp_mem_val << 16) >> 24;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
+      else{
+        MEM_WB.mem_data = (temp_mem_val << 24) >> 24;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
     }
+    //unsigned case
     else if(EX_MEM.EX_op_code == 36){
       IO_size = 8;
-
+      temp_mem_val = static_memory[memory_address];
+      if(access_point == 0){
+        MEM_WB.mem_data = ((unsigned int)temp_mem_val) >> 24;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
+      else if(access_point == 1){
+        MEM_WB.mem_data = ((unsigned int)temp_mem_val << 8) >> 24;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
+      else if(access_point == 2){
+        MEM_WB.mem_data = ((unsigned int)temp_mem_val << 16) >> 24;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
+      else{
+        MEM_WB.mem_data = ((unsigned int)temp_mem_val << 24) >> 24;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
     }
     else if(EX_MEM.EX_op_code == 33){
       IO_size = 16;
-
+      temp_mem_val = static_memory[memory_address];
+      // 0 : access upper half / 2 : access lower half
+      if(access_point == 0){
+        MEM_WB.mem_data = temp_mem_val >> IO_size;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
+      else{
+        MEM_WB.mem_data = (temp_mem_val << IO_size) >> IO_size;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
     }
+    // unsigned case
     else if(EX_MEM.EX_op_code == 37){
       IO_size = 16;
-
+      temp_mem_val = static_memory[memory_address];
+      if(access_point == 0){
+        MEM_WB.mem_data = ((unsigned int)temp_mem_val) >> IO_size;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
+      else{
+        MEM_WB.mem_data = ((unsigned int) temp_mem_val << IO_size) >> IO_size;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
     }
     else if(EX_MEM.EX_op_code == 35){
       IO_size = 32;
-
+      MEM_WB.mem_data = static_memory[memory_address];
+      MEM_WB.size_of_IO = IO_size / 8;
+      return;
     }
   }
   /*
     Memory Save instruction
+    using masking to change byte on position
    */
   else if(EX_MEM.mem_control.MemWrite){
+    int memory_value = static_memory[memory_address];
+    MEM_WB.writeback_control.regWrite = FALSE;
+    MEM_WB.writeback_control.MemtoReg = FALSE;
+    MEM_WB.ALU_result = EX_MEM.ALU_result;
+    MEM_WB.rd_num = EX_MEM.num_reg_to_write;
     if(EX_MEM.EX_op_code == 40){
       IO_size = 8;
-
+      temp_mem_val = EX_MEM.write_data;
+      if(access_point == 0){
+        temp_mem_val = temp_mem_val & 0xF000;
+        static_memory[memory_address] = (memory_value & 0x0FFF) | temp_mem_val;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
+      else if(access_point == 1){
+        temp_mem_val = temp_mem_val & 0x0F00;
+        static_memory[memory_address] = (memory_value & 0xF0FF) | temp_mem_val;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
+      else if(access_point == 2){
+        temp_mem_val = temp_mem_val & 0x00F0;
+        static_memory[memory_address] = (memory_value & 0xFF0F) | temp_mem_val;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
+      else{
+        temp_mem_val = temp_mem_val & 0x000F;
+        static_memory[memory_address] = (memory_value & 0xFFF0) | temp_mem_val;
+        MEM_WB.size_of_IO = IO_size / 8;
+        return;
+      }
     }
     else if(EX_MEM.EX_op_code == 41){
       IO_size = 16;
+      if(access_point == 0){
+        temp_mem_val = temp_mem_val & 0xFF00;
+        static_memory[memory_address] = (memory_value & 0x00FF) | temp_mem_val;
+        return;
+      }
+      else{
+        temp_mem_val = temp_mem_val & 0x00FF;
+        static_memory[memory_address] = (memory_value & 0xFF00) | temp_mem_val;
+        return;
+      }
 
     }
     else if(EX_MEM.EX_op_code == 43){
       IO_size = 32;
-
+      static_memory[memory_address] = EX_MEM.write_data;
+      MEM_WB.size_of_IO = IO_size / 8;
+      return;
     }
   }
 }
@@ -393,15 +519,15 @@ void WB(){
     /*
       Memory Data to target Register
      */
-    if(Mem_WB.writeback_control.MemtoReg){
-      reg[destination_register-1] = MEM_WB.mem_data;
+    if(MEM_WB.writeback_control.MemtoReg){
+      reg[destination_register] = MEM_WB.mem_data;
       return;
     }
     /*
       Arithmetic result to target Register
      */
     else{
-      reg[destination_register-1] = MEM_WB.ALU_result;
+      reg[destination_register] = MEM_WB.ALU_result;
       return;
     }
   }

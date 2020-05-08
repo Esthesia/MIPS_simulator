@@ -47,6 +47,7 @@ typedef struct __EX_MEM {
   MEM_CON mem_control;
   unsigned int EX_pc_num;
   int EX_op_code;
+  int write_data;
   int ALU_result;
   bool zero_flag;
   int num_reg_to_write;
