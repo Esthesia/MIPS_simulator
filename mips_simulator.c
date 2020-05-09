@@ -7,7 +7,6 @@
 #define signExtension(x) ((int32_t)(int16_t)x)
 #define RTYPE 0
 
-int reg[32];
 /*
   Memory Space
   1000 0000(hex)
@@ -15,8 +14,12 @@ int reg[32];
   So 8192 int array as simulating static memory space.
  */
 int static_memory[8192];
+int reg[32];
 int program_counter = 0;
 
+/*
+  Inter Stage Structure and printing structure.
+ */
 _IF_ID IF_ID;
 _ID_EX ID_EX;
 _EX_MEM EX_MEM;
@@ -26,46 +29,38 @@ status cur_status;
 int ALU_control(unsigned int function_code, int op, bool op_0, bool op_1);
 int ALU_execute(unsigned int f_code, unsigned int shift_num, int ALU_con, int read_data_1, int read_data_2);
 
-void WB();
-void MEM();
-void EX();
-void ID();
 void IF(unsigned int inst[], int pc);
+void ID();
+void EX();
+void MEM();
+void WB();
 void print_status();
 
-char *register_print(int reg_num, int reg_val){
-  char print_form[8];
-  int c, k;
-  for(c = 7; c >=0; c--){
-      k = reg_val >> c;
-      if(k & 1)
-          print_form[7-c] = '1';
-      else
-          print_form[7-c] = '0';
-  }
-  printf("[%d] %s\n", reg_num, reg_val);
+void register_print(int reg_num, int reg_val){
+  printf("[%d] %08X\n", reg_num, reg_val);
 }
-
 
 void code_insertion(FILE *fp, int code[]){
     char instruction[10];
-    char **pos;
     int i = 0;
-    while(fgets(instruction, 10, fp) != NULL){
-        unsigned int value = strtol(instruction, pos, 16);
+    while(fgets(instruction, 11, fp) != NULL){
+        unsigned int value = strtol(instruction, NULL, 16);
         code[i] = value;
         i++;
     }
 }
 
-void code_execution(int code[], int mode){
+void code_execution(int code[], int mode, int c){
     if(mode == 0){
-      status cur_status;
       WB();
       MEM();
       EX();
       ID();
+      program_counter = IF_ID.IF_pc_num;
+      cur_status.cur_PC = program_counter*4;
       IF(code, program_counter);
+      cur_status.cur_instruction = IF_ID.instruction;
+      cur_status.cur_cycle = c;
       int reg_iter;
       for(reg_iter = 0; reg_iter < 32; reg_iter++){
         cur_status.cur_reg[reg_iter] = reg[reg_iter];
@@ -74,7 +69,6 @@ void code_execution(int code[], int mode){
       // return program_counter;
     }
     else if(mode == 1){
-      status cur_status;
       WB();
       MEM();
       EX();
@@ -96,11 +90,11 @@ int main(int argc, char *argv[]){
   int mode;
   FILE *instruction_file;
   instruction_file = fopen(argv[1], "r");
-  cycle_num = argv[2];
-  mode = argv[3];
+  cycle_num = atoi(argv[2]);
+  mode = atoi(argv[3]);
   fseek(instruction_file, 0, SEEK_END);
   file_size = ftell(instruction_file);
-  number_of_instruction = file_size / 9;
+  number_of_instruction = file_size / 10;
   fseek(instruction_file, 0, SEEK_SET);
   /*
     file insertion to execute simualtor and file close
@@ -116,19 +110,11 @@ int main(int argc, char *argv[]){
      reg[register_iter] = 0;
   }
   /*
-    just for debugging
-   */
-  // int i;
-  // for(i = 0; i < file_size; i++){
-  //   printf("Cycle %d\n", i+1);
-  //   printf("%08x\n\n", instruction[i]);
-  // }
-  /*
   code execution
    */
   int j;
-  for(j = 0; j < cycle_num; j++){
-    code_execution(instruction, mode);
+  for(j = 1; j <= cycle_num; j++){
+    code_execution(instruction, mode, j);
   }
   /*
     free dynamic allocating memory.
@@ -136,17 +122,19 @@ int main(int argc, char *argv[]){
   free(instruction);
   return 0;
 }
-
+/*
+  Status printing
+ */
 void print_status(){
-  printf("Cycle &d\n",cur_status.cur_cycle);
-  printf("PC: %04x\n",cur_status.cur_PC);
-  printf("Instruction: %08x\n\n",cur_status.cur_instruction);
+  printf("Cycle %d\n",cur_status.cur_cycle);
+  printf("PC: %04X\n",cur_status.cur_PC);
+  printf("Instruction: %08X\n",cur_status.cur_instruction);
   printf("Registers:\n");
   int register_iter;
   for(register_iter = 0; register_iter < 32; register_iter ++){
     register_print(register_iter, cur_status.cur_reg[register_iter]);
   }
-  printf("Memory I/O: "); // not yet implemented
+  printf("Memory I/O: \n\n"); // not yet implemented
 }
 
 void IF(unsigned int inst[], int pc){
@@ -546,6 +534,7 @@ void WB(){
    1001 - shift left logical 9
    1010 - shift right logical 10
    1100 - NOR 12
+   1101 - LUI 13
  */
 int ALU_control(unsigned int function_code, int op, bool op_0, bool op_1){
   int ret_val;
@@ -620,7 +609,7 @@ int ALU_control(unsigned int function_code, int op, bool op_0, bool op_1){
       return  ret_val;
     }
     else if(op == 15){
-      ret_val = 9;
+      ret_val = 13;
       return ret_val;
     }
   }
@@ -675,6 +664,10 @@ int ALU_execute(unsigned int f_code, unsigned int shift_num, int ALU_con, int re
   }
   else if(ALU_con == 12){
     execution_output = ~(read_data_1 | read_data_2);
+    return execution_output;
+  }
+  else if(ALU_con == 13){
+    execution_output = read_data_2 << 16;
     return execution_output;
   }
 }

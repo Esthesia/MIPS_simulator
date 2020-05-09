@@ -1,3 +1,6 @@
+/*
+  CONTROL UNIT and INTER-STAGE STRUCTURE simulating register in MIPS
+ */
 typedef enum {FALSE, TRUE} bool;
 
 typedef struct __EX_CONTROL {
