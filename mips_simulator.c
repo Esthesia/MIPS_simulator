@@ -42,6 +42,11 @@ void code_insertion(FILE *fp, int code[]);
 void code_execution(int code[], int mode, int c);
 
 /*
+  HAZARD DETECTION UNIT
+    DATA_FORWARDING - data hazards handling in ALU instruction
+ */
+void DATA_FORWADING();
+/*
 MAIN function
 1. File reading and dynamically allocate instruction memory to start.
 2. code executing given number of cycle and mode.
@@ -93,12 +98,13 @@ int main(int argc, char *argv[]){
 
 void IF(unsigned int inst[], int pc){
   unsigned int IF_UNIT;
-  if(ID_EX.ex_control.PCSrc == TRUE || EX_MEM.mem_control.PCSrc){
-    IF_UNIT = NOP_IN;
-  }
-  else{
-    IF_UNIT = inst[pc];
-  }
+  // if(ID_EX.ex_control.PCSrc == TRUE || EX_MEM.mem_control.PCSrc){
+  //   IF_UNIT = NOP_IN;
+  // }
+  // else{
+  //   IF_UNIT = inst[pc];
+  // }
+  IF_UNIT = inst[pc];
   pc = pc + 1;
   IF_ID.IF_pc_num = pc;
   IF_ID.instruction = IF_UNIT;
@@ -115,6 +121,7 @@ void ID(){
   ID_EX.ID_op_code = op_code;
   ID_EX.rs_value = reg[rs];
   ID_EX.rt_value = reg[rt];
+  ID_EX.RS = rs;
   ID_EX.RT = rt;
   ID_EX.RD = rd;
   ID_EX.extension_num = signExtension(immediate_num);
@@ -587,6 +594,7 @@ int ALU_control(unsigned int function_code, int op, bool op_0, bool op_1){
     }
   }
 }
+
 /*
   ALU executor according to ALU control value
  */
@@ -649,6 +657,7 @@ int ALU_execute(unsigned int op_, unsigned int shift_num, int ALU_con, int read_
     return execution_output;
   }
 }
+
 /*
   PC executor at EX stage what pc value choosing - JUMP/BRANCH case
   if PCSrc in ID_EX TRUE, No use original updated PC(PC+4)
@@ -695,6 +704,51 @@ void EX_pc_execute(unsigned int JR){
 }
 
 /*
+  Data Forwarding in ALU operations
+  Condition - EX/MEM.Regwrite , MEM/WB.Regwrite is TRUE and EX/MEM, MEM/WB Rd is not $zero
+ */
+void DATA_FORWADING(){
+    /*
+    MEM HAZARD
+    */
+    if(MEM_WB.writeback_control.regWrite && MEM_WB.rd_num !=0){
+      /*
+      Case 2-A
+      */
+      if(ID_EX.RS == MEM_WB.rd_num){
+        ID_EX.rs_value = MEM_WB.ALU_result;
+        return;
+      }
+      /*
+      Case 2-B
+      */
+      else if(ID_EX.RT == MEM_WB.rd_num){
+        ID_EX.rt_value = MEM_WB.ALU_result;
+        return;
+      }
+    }
+    /*
+      EX HAZARD
+     */
+    else if(EX_MEM.mem_control.regWrite && EX_MEM.num_reg_to_write !=0){
+      /*
+        Case 1-A
+       */
+      if(ID_EX.RS == EX_MEM.num_reg_to_write){
+        ID_EX.rs_value = EX_MEM.ALU_result;
+        return;
+      }
+      /*
+        Case 1-B
+       */
+      else if(ID_EX.RT == EX_MEM.num_reg_to_write){
+        ID_EX.rt_value = EX_MEM.ALU_result;
+        return;
+      }
+    }
+}
+
+/*
   Status printing
  */
 void print_status(){
@@ -734,12 +788,18 @@ void code_insertion(FILE *fp, int code[]){
 
 void code_execution(int code[], int mode, int c){
     if(mode == 0){
+      if(EX_MEM.mem_control.PCSrc){
+        program_counter = EX_MEM.EX_pc_num;
+        cur_status.cur_PC = program_counter*4;
+      }
+      else{
+        program_counter = IF_ID.IF_pc_num;
+        cur_status.cur_PC = program_counter*4;
+      }
       WB();
       MEM();
       EX();
       ID();
-      program_counter = IF_ID.IF_pc_num;
-      cur_status.cur_PC = program_counter*4;
       IF(code, program_counter);
       cur_status.cur_instruction = IF_ID.instruction;
       cur_status.cur_cycle = c;
@@ -751,11 +811,22 @@ void code_execution(int code[], int mode, int c){
       // return program_counter;
     }
     else if(mode == 1){
+      if(EX_MEM.mem_control.PCSrc){
+        program_counter = EX_MEM.EX_pc_num;
+        cur_status.cur_PC = program_counter*4;
+      }
+      else{
+        program_counter = IF_ID.IF_pc_num;
+        cur_status.cur_PC = program_counter*4;
+      }
       WB();
       MEM();
       EX();
       ID();
+      DATA_FORWADING();
       IF(code, program_counter);
+      cur_status.cur_instruction = IF_ID.instruction;
+      cur_status.cur_cycle = c;
       print_status();
       // return program_counter;
     }

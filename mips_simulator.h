@@ -39,6 +39,7 @@ typedef struct __ID_EX {
   int ID_op_code;
   int rs_value;
   int rt_value;
+  int RS; // FOR HAZARD DETECTION ID/EX.RegisterRs
   int RT;
   int RD;
   int extension_num;
@@ -54,7 +55,7 @@ typedef struct __EX_MEM {
   int ALU_result;
   bool zero_flag;
   bool jump_control;
-  int num_reg_to_write;
+  int num_reg_to_write; // EX/MEM.RegisterRd in Data forwarding case
 } _EX_MEM;
 
 typedef struct __MEM_WB {
@@ -62,7 +63,7 @@ typedef struct __MEM_WB {
   int size_of_IO;
   int mem_data;
   int ALU_result;
-  int rd_num;
+  int rd_num; // MEM/WB.RegisterRd in Data forwarding case
 } _MEM_WB;
 
 typedef struct __status {
