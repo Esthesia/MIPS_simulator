@@ -13,6 +13,7 @@ typedef struct __EX_CONTROL {
   bool MemtoReg;
   bool ALUop_0;
   bool ALUop_1;
+  bool stall; // stall to insert "NOP"
 } EX_CON;
 
 typedef struct __MEM_CONTROL {
@@ -45,6 +46,7 @@ typedef struct __ID_EX {
   int extension_num;
   bool jump_control;
   unsigned int jump_address;
+  unsigned int prev_instruction;
 } _ID_EX;
 
 typedef struct __EX_MEM {

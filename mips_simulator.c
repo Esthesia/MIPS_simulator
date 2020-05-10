@@ -44,8 +44,10 @@ void code_execution(int code[], int mode, int c);
 /*
   HAZARD DETECTION UNIT
     DATA_FORWARDING - data hazards handling in ALU instruction
+    TROMM - Load use case checking and make "Bubble"
  */
 void DATA_FORWADING();
+void TROMM();
 /*
 MAIN function
 1. File reading and dynamically allocate instruction memory to start.
@@ -98,12 +100,6 @@ int main(int argc, char *argv[]){
 
 void IF(unsigned int inst[], int pc){
   unsigned int IF_UNIT;
-  // if(ID_EX.ex_control.PCSrc == TRUE || EX_MEM.mem_control.PCSrc){
-  //   IF_UNIT = NOP_IN;
-  // }
-  // else{
-  //   IF_UNIT = inst[pc];
-  // }
   IF_UNIT = inst[pc];
   pc = pc + 1;
   IF_ID.IF_pc_num = pc;
@@ -112,7 +108,14 @@ void IF(unsigned int inst[], int pc){
 }
 
 void ID(){
-  unsigned int ID_INST = IF_ID.instruction;
+  unsigned int ID_INST;
+  /*
+    IF stall flag TRUE then previous instruction works again.
+   */
+  if(ID_EX.ex_control.stall)
+    ID_INST = ID_EX.prev_instruction;
+  else
+    ID_INST = IF_ID.instruction;
   unsigned int op_code = ID_INST >> 26;
   unsigned int rs = (ID_INST << 6) >> 27;
   unsigned int rt = (ID_INST << 11) >> 27;
@@ -126,6 +129,7 @@ void ID(){
   ID_EX.RD = rd;
   ID_EX.extension_num = signExtension(immediate_num);
   ID_EX.jump_address = (ID_INST << 6) >> 6;
+  ID_EX.prev_instruction = ID_INST;
   /*
     R-TYPE
     When function code is 8(JAL), jump control goes to true
@@ -248,9 +252,25 @@ void ID(){
     ID_EX.ex_control.ALUop_1 = FALSE;
     return;
   }
+
+  /*
+    AFTER DECODING, CHECK FOR HAZARD AND CHOICE TO MAKE BUBBLE.
+   */
+  TROMM();
 }
 
 void EX(){
+  /*
+    STALL signal on - NOP operation execute (LOAD USE CASE)
+   */
+  if(ID_EX.ex_control.stall){
+    EX_MEM.mem_control.PCSrc = FALSE;
+    EX_MEM.mem_control.MemRead = FALSE;
+    EX_MEM.mem_control.MemWrite = FALSE;
+    EX_MEM.mem_control.regWrite = FALSE;
+    EX_MEM.mem_control.MemtoReg = FALSE;
+    return;
+  }
   /*
     Control value assigning
    */
@@ -706,6 +726,8 @@ void EX_pc_execute(unsigned int JR){
 /*
   Data Forwarding in ALU operations
   Condition - EX/MEM.Regwrite , MEM/WB.Regwrite is TRUE and EX/MEM, MEM/WB Rd is not $zero
+  + MEMREAD DATA FORWARDING
+
  */
 void DATA_FORWADING(){
     /*
@@ -746,8 +768,44 @@ void DATA_FORWADING(){
         return;
       }
     }
+    /*
+      Memory Data Forwarding
+     */
+    else if(MEM_WB.writeback_control.regWrite && MEM_WB.rd_num !=0 && MEM_WB.writeback_control.MemtoReg){
+      if(ID_EX.RS == MEM_WB.rd_num){
+        ID_EX.rs_value = MEM_WB.mem_data;
+        return;
+      }
+
+      else if(ID_EX.RT == MEM_WB.rd_num){
+        ID_EX.rt_value = MEM_WB.mem_data;
+        return;
+      }
+    }
 }
 
+/*
+  TROMM
+  condition - ID/EX.MemRead TRUE and
+              1. ID/EX.RegisterRt = IF/ID.RegisterRs
+              2. ID/EX.RegisterRt = IF/ID.RegisterRt
+
+ */
+void TROMM(){
+  if(EX_MEM.mem_control.MemRead){
+    if(ID_EX.RS == EX_MEM.num_reg_to_write){
+      ID_EX.ex_control.stall = TRUE;
+      return;
+    }
+    else if(ID_EX.RT == EX_MEM.num_reg_to_write){
+      ID_EX.ex_control.stall = TRUE;
+    }
+  }
+  else{
+    ID_EX.ex_control.stall = FALSE;
+  }
+
+}
 /*
   Status printing
  */
@@ -811,13 +869,19 @@ void code_execution(int code[], int mode, int c){
       // return program_counter;
     }
     else if(mode == 1){
-      if(EX_MEM.mem_control.PCSrc){
-        program_counter = EX_MEM.EX_pc_num;
-        cur_status.cur_PC = program_counter*4;
-      }
-      else{
-        program_counter = IF_ID.IF_pc_num;
-        cur_status.cur_PC = program_counter*4;
+      /*
+        STALL flag on - NO UPDATE
+       */
+      cur_status.cur_PC = program_counter*4; // not Updated PC - only valid at stalling.
+      if(!ID_EX.ex_control.stall){
+        if(EX_MEM.mem_control.PCSrc){
+          program_counter = EX_MEM.EX_pc_num;
+          cur_status.cur_PC = program_counter*4; // Updated PC
+        }
+        else{
+          program_counter = IF_ID.IF_pc_num;
+          cur_status.cur_PC = program_counter*4; // Updated PC
+        }
       }
       WB();
       MEM();
