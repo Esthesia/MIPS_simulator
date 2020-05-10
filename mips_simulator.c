@@ -7,6 +7,7 @@
 #define signExtension(x) ((int32_t)(int16_t)x)
 #define RTYPE 0
 
+#define NOP_IN 0x00000000
 /*
   Memory Space
   1000 0000(hex)
@@ -28,6 +29,7 @@ status cur_status;
 
 int ALU_control(unsigned int function_code, int op, bool op_0, bool op_1);
 int ALU_execute(unsigned int f_code, unsigned int shift_num, int ALU_con, int read_data_1, int read_data_2);
+void EX_pc_execute(unsigned int JR);
 
 void IF(unsigned int inst[], int pc);
 void ID();
@@ -35,50 +37,15 @@ void EX();
 void MEM();
 void WB();
 void print_status();
+void register_print(int reg_num, int reg_val);
+void code_insertion(FILE *fp, int code[]);
+void code_execution(int code[], int mode, int c);
 
-void register_print(int reg_num, int reg_val){
-  printf("[%d] %08X\n", reg_num, reg_val);
-}
-
-void code_insertion(FILE *fp, int code[]){
-    char instruction[10];
-    int i = 0;
-    while(fgets(instruction, 11, fp) != NULL){
-        unsigned int value = strtol(instruction, NULL, 16);
-        code[i] = value;
-        i++;
-    }
-}
-
-void code_execution(int code[], int mode, int c){
-    if(mode == 0){
-      WB();
-      MEM();
-      EX();
-      ID();
-      program_counter = IF_ID.IF_pc_num;
-      cur_status.cur_PC = program_counter*4;
-      IF(code, program_counter);
-      cur_status.cur_instruction = IF_ID.instruction;
-      cur_status.cur_cycle = c;
-      int reg_iter;
-      for(reg_iter = 0; reg_iter < 32; reg_iter++){
-        cur_status.cur_reg[reg_iter] = reg[reg_iter];
-      }
-      print_status();
-      // return program_counter;
-    }
-    else if(mode == 1){
-      WB();
-      MEM();
-      EX();
-      ID();
-      IF(code, program_counter);
-      print_status();
-      // return program_counter;
-    }
-}
-
+/*
+MAIN function
+1. File reading and dynamically allocate instruction memory to start.
+2. code executing given number of cycle and mode.
+ */
 
 int main(int argc, char *argv[]){
   /*
@@ -122,23 +89,16 @@ int main(int argc, char *argv[]){
   free(instruction);
   return 0;
 }
-/*
-  Status printing
- */
-void print_status(){
-  printf("Cycle %d\n",cur_status.cur_cycle);
-  printf("PC: %04X\n",cur_status.cur_PC);
-  printf("Instruction: %08X\n",cur_status.cur_instruction);
-  printf("Registers:\n");
-  int register_iter;
-  for(register_iter = 0; register_iter < 32; register_iter ++){
-    register_print(register_iter, cur_status.cur_reg[register_iter]);
-  }
-  printf("Memory I/O: \n\n"); // not yet implemented
-}
+
 
 void IF(unsigned int inst[], int pc){
-  unsigned int IF_UNIT = inst[pc];
+  unsigned int IF_UNIT;
+  if(ID_EX.ex_control.PCSrc == TRUE || EX_MEM.mem_control.PCSrc){
+    IF_UNIT = NOP_IN;
+  }
+  else{
+    IF_UNIT = inst[pc];
+  }
   pc = pc + 1;
   IF_ID.IF_pc_num = pc;
   IF_ID.instruction = IF_UNIT;
@@ -169,9 +129,15 @@ void ID(){
     // JR instruction - need to end at ID/EX structure
     if(funct_code == 8){
       ID_EX.jump_control = TRUE;
+      ID_EX.ex_control.regDst = FALSE;
+      ID_EX.ex_control.ALUSrc = FALSE;
       ID_EX.ex_control.PCSrc = TRUE;
-      // when register 31(RA) does not come back - how to deal with 20200507
-      ID_EX.ID_pc_num = reg[31];
+      ID_EX.ex_control.MemRead = FALSE;
+      ID_EX.ex_control.MemWrite = FALSE;
+      ID_EX.ex_control.regWrite = FALSE;
+      ID_EX.ex_control.MemtoReg = FALSE;
+      ID_EX.ex_control.ALUop_0 = TRUE;
+      ID_EX.ex_control.ALUop_1 = FALSE;
       return;
     }
     else{
@@ -192,12 +158,22 @@ void ID(){
     J-TYPE  - need to make a bubble of next IF -20200507
    */
   else if(op_code == 2 || op_code == 3){
-    unsigned int ID_jump_address = (ID_INST << 6) >> 6;
-    if(op_code == 3){
-      reg[31] = IF_ID.IF_pc_num;
-    }
-    ID_EX.ID_pc_num = ID_EX.jump_address;
     ID_EX.jump_control = TRUE;
+    ID_EX.ex_control.regDst = FALSE;
+    ID_EX.ex_control.ALUSrc = FALSE;
+    ID_EX.ex_control.PCSrc = TRUE;
+    ID_EX.ex_control.MemRead = FALSE;
+    ID_EX.ex_control.MemWrite = FALSE;
+    /*
+      JAL need to write return address to R31 so RegWrite control to TRUE
+     */
+    ID_EX.ex_control.regWrite = FALSE;
+    if(op_code == 3){
+      ID_EX.ex_control.regWrite = TRUE;
+    }
+    ID_EX.ex_control.MemtoReg = FALSE;
+    ID_EX.ex_control.ALUop_0 = TRUE;
+    ID_EX.ex_control.ALUop_1 = FALSE;
     return;
   }
   /*
@@ -254,13 +230,13 @@ void ID(){
    */
   else if(op_code == 40 || op_code == 41 || op_code == 43){
     ID_EX.jump_control = FALSE;
-    // ID_EX.ex_control.regDst = FALSE;
+    ID_EX.ex_control.regDst = FALSE;
     ID_EX.ex_control.ALUSrc = TRUE;
     ID_EX.ex_control.PCSrc = FALSE;
     ID_EX.ex_control.MemRead = FALSE;
     ID_EX.ex_control.MemWrite = TRUE;
     ID_EX.ex_control.regWrite = FALSE;
-    // ID_EX.ex_control.MemtoReg = FALSE;
+    ID_EX.ex_control.MemtoReg = FALSE;
     ID_EX.ex_control.ALUop_0 = FALSE;
     ID_EX.ex_control.ALUop_1 = FALSE;
     return;
@@ -268,13 +244,6 @@ void ID(){
 }
 
 void EX(){
-  if(ID_EX.jump_control){
-    EX_MEM.mem_control.PCSrc = ID_EX.ex_control.PCSrc;
-    EX_MEM.mem_control.MemRead = FALSE;
-    EX_MEM.mem_control.MemWrite = FALSE;
-    EX_MEM.mem_control.regWrite = FALSE;
-    EX_MEM.mem_control.MemtoReg = FALSE;
-  }
   /*
     Control value assigning
    */
@@ -283,13 +252,13 @@ void EX(){
   EX_MEM.mem_control.MemWrite = ID_EX.ex_control.MemWrite;
   EX_MEM.mem_control.regWrite = ID_EX.ex_control.regWrite;
   EX_MEM.mem_control.MemtoReg = ID_EX.ex_control.MemtoReg;
+  EX_MEM.jump_control = ID_EX.jump_control;
   /*
     Assigning Data to next step
    */
-  EX_MEM.EX_pc_num = ID_EX.ID_pc_num;
+  // EX_MEM.EX_pc_num = ID_EX.ID_pc_num;
   EX_MEM.EX_op_code = ID_EX.ID_op_code;
   EX_MEM.write_data = ID_EX.rt_value;
-  unsigned int branch_destination = ID_EX.extension_num;
   unsigned int funct = ((unsigned int)ID_EX.extension_num << 26) >> 26;
   unsigned int shamt = ((unsigned int)ID_EX.extension_num << 21) >> 27;
   int ex_op = ID_EX.ID_op_code;
@@ -303,13 +272,14 @@ void EX(){
    */
   if(ID_EX.ex_control.ALUSrc)
     ALU_input_2 = ID_EX.extension_num;
-  int ALU_output = ALU_execute(funct, shamt, ALU_control_output, ALU_input_1, ALU_input_2);
+  int ALU_output = ALU_execute(ex_op, shamt, ALU_control_output, ALU_input_1, ALU_input_2);
   if(ID_EX.ex_control.regDst)
     decision_RegDst = ID_EX.RD;
   else
     decision_RegDst = ID_EX.RT;
   EX_MEM.ALU_result = ALU_output;
   EX_MEM.num_reg_to_write = decision_RegDst;
+  EX_pc_execute(funct);
 }
 
 void MEM(){
@@ -542,6 +512,9 @@ int ALU_control(unsigned int function_code, int op, bool op_0, bool op_1){
     ret_val = 2;
     return ret_val;
   }
+  /*
+    For branch instruction - minus
+   */
   else if(op_0 == TRUE && op_1 == FALSE){
     ret_val = 6;
     return ret_val;
@@ -617,7 +590,7 @@ int ALU_control(unsigned int function_code, int op, bool op_0, bool op_1){
 /*
   ALU executor according to ALU control value
  */
-int ALU_execute(unsigned int f_code, unsigned int shift_num, int ALU_con, int read_data_1, int read_data_2){
+int ALU_execute(unsigned int op_, unsigned int shift_num, int ALU_con, int read_data_1, int read_data_2){
   int execution_output;
   EX_MEM.zero_flag = FALSE;
   if(ALU_con == 0){
@@ -637,6 +610,11 @@ int ALU_execute(unsigned int f_code, unsigned int shift_num, int ALU_con, int re
     //               if value is zero, make EX_MEM.zero_flag TRUE, otherwise, default = FALSE.
     execution_output = read_data_1 - read_data_2;
     if(execution_output == 0)
+      EX_MEM.zero_flag = TRUE;
+      /*
+        BNE case - reverting result;
+       */
+    else if(op_ == 5 && execution_output != 0)
       EX_MEM.zero_flag = TRUE;
     return execution_output;
   }
@@ -670,4 +648,115 @@ int ALU_execute(unsigned int f_code, unsigned int shift_num, int ALU_con, int re
     execution_output = read_data_2 << 16;
     return execution_output;
   }
+}
+/*
+  PC executor at EX stage what pc value choosing - JUMP/BRANCH case
+  if PCSrc in ID_EX TRUE, No use original updated PC(PC+4)
+  else just PC as usual that already in IF ID stage.
+ */
+void EX_pc_execute(unsigned int JR){
+  if(ID_EX.ex_control.PCSrc){
+    /*
+      Branch TAKEN case / BNE reverting already implemented so only check zero flag
+     */
+    if(EX_MEM.zero_flag){
+      EX_MEM.EX_pc_num = ID_EX.ID_pc_num + ID_EX.extension_num;
+      return;
+    }
+    /*
+      JR - return address at R31
+     */
+    else if(JR == 9){
+      EX_MEM.EX_pc_num = reg[31];
+      return;
+    }
+    /*
+      JAL case
+     */
+    else if(ID_EX.ex_control.regWrite){
+      EX_MEM.ALU_result = ID_EX.ID_pc_num;
+      EX_MEM.num_reg_to_write = 31;
+      EX_MEM.EX_pc_num = ID_EX.jump_address;
+      return;
+    }
+    /*
+      Plain Jump case;
+     */
+    else
+      EX_MEM.EX_pc_num = ID_EX.jump_address;
+      return;
+  }
+  /*
+    Any other case that pc = pc + 4;
+   */
+  else
+    EX_MEM.EX_pc_num = ID_EX.ID_pc_num;
+    return;
+}
+
+/*
+  Status printing
+ */
+void print_status(){
+  printf("Cycle %d\n",cur_status.cur_cycle);
+  /*
+    If the instruction is NOP(0x00000000) for stalling, print out NOP in PC and instruction
+   */
+  if(cur_status.cur_instruction == NOP_IN){
+    printf("PC : NOP\n");
+    printf("Instruction : NOP\n");
+  }
+  else{
+    printf("PC: %04X\n",cur_status.cur_PC);
+    printf("Instruction: %08X\n",cur_status.cur_instruction);
+  }
+  printf("Registers:\n");
+  int register_iter;
+  for(register_iter = 0; register_iter < 32; register_iter ++){
+    register_print(register_iter, cur_status.cur_reg[register_iter]);
+  }
+  printf("Memory I/O: \n\n"); // not yet implemented
+}
+
+void register_print(int reg_num, int reg_val){
+  printf("[%d] %08X\n", reg_num, reg_val);
+}
+
+void code_insertion(FILE *fp, int code[]){
+    char instruction[10];
+    int i = 0;
+    while(fgets(instruction, 11, fp) != NULL){
+        unsigned int value = strtol(instruction, NULL, 16);
+        code[i] = value;
+        i++;
+    }
+}
+
+void code_execution(int code[], int mode, int c){
+    if(mode == 0){
+      WB();
+      MEM();
+      EX();
+      ID();
+      program_counter = IF_ID.IF_pc_num;
+      cur_status.cur_PC = program_counter*4;
+      IF(code, program_counter);
+      cur_status.cur_instruction = IF_ID.instruction;
+      cur_status.cur_cycle = c;
+      int reg_iter;
+      for(reg_iter = 0; reg_iter < 32; reg_iter++){
+        cur_status.cur_reg[reg_iter] = reg[reg_iter];
+      }
+      print_status();
+      // return program_counter;
+    }
+    else if(mode == 1){
+      WB();
+      MEM();
+      EX();
+      ID();
+      IF(code, program_counter);
+      print_status();
+      // return program_counter;
+    }
 }

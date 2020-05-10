@@ -53,6 +53,7 @@ typedef struct __EX_MEM {
   int write_data;
   int ALU_result;
   bool zero_flag;
+  bool jump_control;
   int num_reg_to_write;
 } _EX_MEM;
 
@@ -65,6 +66,7 @@ typedef struct __MEM_WB {
 } _MEM_WB;
 
 typedef struct __status {
+  bool no_operation;
   int cur_cycle;
   int cur_PC;
   unsigned cur_instruction;
