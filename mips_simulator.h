@@ -3,6 +3,11 @@
  */
 typedef enum {FALSE, TRUE} bool;
 
+typedef struct __BRANCH {
+  bool prediction;
+  unsigned int taken_address;
+} BRANCH_INDI;
+
 typedef struct __EX_CONTROL {
   bool regDst;
   bool ALUSrc;
@@ -53,11 +58,16 @@ typedef struct __EX_MEM {
   MEM_CON mem_control;
   unsigned int EX_pc_num;
   int EX_op_code;
-  int write_data;
+  int write_data; // In Save case, write data.
   int ALU_result;
   bool zero_flag;
-  bool jump_control;
+  bool branch_control;
   int num_reg_to_write; // EX/MEM.RegisterRd in Data forwarding case
+  /*
+    For Load-Store non-stall data forwarding(check condition)
+   */
+  int RS;
+  int immediate_num; // immediate NUM 16bits - can be BRANCH ADDRESS
 } _EX_MEM;
 
 typedef struct __MEM_WB {

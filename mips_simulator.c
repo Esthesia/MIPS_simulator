@@ -10,11 +10,11 @@
 #define NOP_IN 0x00000000
 /*
   Memory Space
-  1000 0000(hex)
-  1000 8000(hex)
-  So 8192 int array as simulating static memory space.
+  0000(hex)
+  FFFF(hex)
+  So 16384 int array as simulating static memory space.
  */
-int static_memory[8192];
+int static_memory[16384];
 int reg[32];
 int program_counter = 0;
 
@@ -26,10 +26,10 @@ _ID_EX ID_EX;
 _EX_MEM EX_MEM;
 _MEM_WB MEM_WB;
 status cur_status;
+BRANCH_INDI BRANCH_INDICATOR;
 
 int ALU_control(unsigned int function_code, int op, bool op_0, bool op_1);
 int ALU_execute(unsigned int f_code, unsigned int shift_num, int ALU_con, int read_data_1, int read_data_2);
-void EX_pc_execute(unsigned int JR);
 
 void IF(unsigned int inst[], int pc);
 void ID();
@@ -48,6 +48,7 @@ void code_execution(int code[], int mode, int c);
  */
 void DATA_FORWADING();
 void TROMM();
+void BRANCH_TAKER();
 /*
 MAIN function
 1. File reading and dynamically allocate instruction memory to start.
@@ -104,6 +105,13 @@ void IF(unsigned int inst[], int pc){
   pc = pc + 1;
   IF_ID.IF_pc_num = pc;
   IF_ID.instruction = IF_UNIT;
+  /*
+    PRIDCTION FAIL
+   */
+  if(BRANCH_INDICATOR.prediction){
+    IF_ID.IF_pc_num = 0;
+    IF_ID.instruction = 0;
+  }
   return;
 }
 
@@ -114,25 +122,43 @@ void ID(){
    */
   if(ID_EX.ex_control.stall)
     ID_INST = ID_EX.prev_instruction;
-  else
+  else{
     ID_INST = IF_ID.instruction;
+    ID_EX.ID_pc_num = IF_ID.IF_pc_num;
+  }
   unsigned int op_code = ID_INST >> 26;
   unsigned int rs = (ID_INST << 6) >> 27;
   unsigned int rt = (ID_INST << 11) >> 27;
   unsigned int rd = (ID_INST << 16) >> 27;
   unsigned int immediate_num = (ID_INST << 16) >> 16;
+
   ID_EX.ID_op_code = op_code;
   ID_EX.rs_value = reg[rs];
   ID_EX.rt_value = reg[rt];
   ID_EX.RS = rs;
   ID_EX.RT = rt;
   ID_EX.RD = rd;
-  ID_EX.extension_num = signExtension(immediate_num);
+  ID_EX.extension_num = signExtension(immediate_num); // immediate OR branch address
   ID_EX.jump_address = (ID_INST << 6) >> 6;
   ID_EX.prev_instruction = ID_INST;
   /*
+    CHECK PREDICTION RIGHT OR WRONG
+   */
+  if(BRANCH_INDICATOR.prediction){
+    ID_EX.ex_control.regDst = FALSE;
+    ID_EX.ex_control.ALUSrc = FALSE;
+    ID_EX.ex_control.PCSrc = FALSE;
+    ID_EX.ex_control.MemRead = FALSE;
+    ID_EX.ex_control.MemWrite = FALSE;
+    ID_EX.ex_control.MemtoReg = FALSE;
+    ID_EX.ex_control.ALUop_0 = FALSE;
+    ID_EX.ex_control.ALUop_1 = FALSE;
+    ID_EX.ex_control.stall = FALSE;
+    return;
+  }
+  /*
     R-TYPE
-    When function code is 8(JAL), jump control goes to true
+    When function code is 8(JR), jump control goes to true
     Otherwise, Normal R-type control unit.
    */
   if(op_code == RTYPE){
@@ -149,6 +175,11 @@ void ID(){
       ID_EX.ex_control.MemtoReg = FALSE;
       ID_EX.ex_control.ALUop_0 = TRUE;
       ID_EX.ex_control.ALUop_1 = FALSE;
+      ID_EX.jump_address = reg[31]; // RETURN ADDRESS ASSIGNING
+      /*
+        AFTER DECODING, CHECK FOR HAZARD AND CHOICE TO MAKE BUBBLE.
+       */
+      TROMM();
       return;
     }
     else{
@@ -162,11 +193,13 @@ void ID(){
       ID_EX.ex_control.MemtoReg = FALSE;
       ID_EX.ex_control.ALUop_0 = FALSE;
       ID_EX.ex_control.ALUop_1 = TRUE;
+      TROMM();
       return;
     }
   }
   /*
     J-TYPE  - need to make a bubble of next IF -20200507
+            - MODE 0/1 control hazard implement no need to bubble - 20200511
    */
   else if(op_code == 2 || op_code == 3){
     ID_EX.jump_control = TRUE;
@@ -185,6 +218,7 @@ void ID(){
     ID_EX.ex_control.MemtoReg = FALSE;
     ID_EX.ex_control.ALUop_0 = TRUE;
     ID_EX.ex_control.ALUop_1 = FALSE;
+    TROMM();
     return;
   }
   /*
@@ -202,6 +236,7 @@ void ID(){
     ID_EX.ex_control.MemtoReg = FALSE;
     ID_EX.ex_control.ALUop_0 = TRUE;
     ID_EX.ex_control.ALUop_1 = FALSE;
+    TROMM();
     return;
   }
   /*
@@ -218,6 +253,7 @@ void ID(){
     ID_EX.ex_control.MemtoReg = FALSE;
     ID_EX.ex_control.ALUop_0 = TRUE;
     ID_EX.ex_control.ALUop_1 = TRUE;
+    TROMM();
     return;
   }
   /*
@@ -234,6 +270,7 @@ void ID(){
     ID_EX.ex_control.MemtoReg = TRUE;
     ID_EX.ex_control.ALUop_0 = FALSE;
     ID_EX.ex_control.ALUop_1 = FALSE;
+    TROMM();
     return;
   }
   /*
@@ -250,13 +287,10 @@ void ID(){
     ID_EX.ex_control.MemtoReg = FALSE;
     ID_EX.ex_control.ALUop_0 = FALSE;
     ID_EX.ex_control.ALUop_1 = FALSE;
+    TROMM();
     return;
   }
 
-  /*
-    AFTER DECODING, CHECK FOR HAZARD AND CHOICE TO MAKE BUBBLE.
-   */
-  TROMM();
 }
 
 void EX(){
@@ -272,6 +306,18 @@ void EX(){
     return;
   }
   /*
+    PREDICTION FAILURE
+   */
+  if(BRANCH_INDICATOR.prediction){
+    EX_MEM.mem_control.PCSrc = FALSE;
+    EX_MEM.mem_control.MemRead = FALSE;
+    EX_MEM.mem_control.MemWrite = FALSE;
+    EX_MEM.mem_control.regWrite = FALSE;
+    EX_MEM.mem_control.MemtoReg = FALSE;
+    return;
+  }
+
+  /*
     Control value assigning
    */
   EX_MEM.mem_control.PCSrc = ID_EX.ex_control.PCSrc;
@@ -279,13 +325,15 @@ void EX(){
   EX_MEM.mem_control.MemWrite = ID_EX.ex_control.MemWrite;
   EX_MEM.mem_control.regWrite = ID_EX.ex_control.regWrite;
   EX_MEM.mem_control.MemtoReg = ID_EX.ex_control.MemtoReg;
-  EX_MEM.jump_control = ID_EX.jump_control;
+
   /*
     Assigning Data to next step
    */
-  // EX_MEM.EX_pc_num = ID_EX.ID_pc_num;
+  EX_MEM.EX_pc_num = ID_EX.ID_pc_num;
   EX_MEM.EX_op_code = ID_EX.ID_op_code;
   EX_MEM.write_data = ID_EX.rt_value;
+  EX_MEM.RS = ID_EX.RS;
+  EX_MEM.immediate_num = ID_EX.extension_num;
   unsigned int funct = ((unsigned int)ID_EX.extension_num << 26) >> 26;
   unsigned int shamt = ((unsigned int)ID_EX.extension_num << 21) >> 27;
   int ex_op = ID_EX.ID_op_code;
@@ -306,7 +354,14 @@ void EX(){
     decision_RegDst = ID_EX.RT;
   EX_MEM.ALU_result = ALU_output;
   EX_MEM.num_reg_to_write = decision_RegDst;
-  EX_pc_execute(funct);
+  /*
+    JAL case
+   */
+  if(ID_EX.ex_control.regWrite && ID_EX.jump_control){
+    EX_MEM.ALU_result = ID_EX.ID_pc_num;
+    EX_MEM.num_reg_to_write = 31;
+  }
+  EX_MEM.branch_control = EX_MEM.mem_control.PCSrc & EX_MEM.zero_flag;
 }
 
 void MEM(){
@@ -315,6 +370,13 @@ void MEM(){
   int memory_address = EX_MEM.ALU_result / 4;
   int access_point = EX_MEM.ALU_result % 4;
   int temp_mem_val;
+  /*
+    BRANCH TAKER check whether or not prediction is RIGHT
+    If right, just prediction unit to false to keep go on,
+    otherwise, prediction unit to True EX/ID/IF Flushing.
+    It can recover to false because of ordering MEM -> EX -> ID -> IF in simulation.
+   */
+  BRANCH_TAKER();
   // no memory accessing occurs - Rtype
   if(!EX_MEM.mem_control.MemRead && !EX_MEM.mem_control.MemWrite){
     // All control value are zero == no need to MEM and WB stage
@@ -682,46 +744,9 @@ int ALU_execute(unsigned int op_, unsigned int shift_num, int ALU_con, int read_
   PC executor at EX stage what pc value choosing - JUMP/BRANCH case
   if PCSrc in ID_EX TRUE, No use original updated PC(PC+4)
   else just PC as usual that already in IF ID stage.
+  NOT IN EX STAGE SO DELETE IT -20200511
  */
-void EX_pc_execute(unsigned int JR){
-  if(ID_EX.ex_control.PCSrc){
-    /*
-      Branch TAKEN case / BNE reverting already implemented so only check zero flag
-     */
-    if(EX_MEM.zero_flag){
-      EX_MEM.EX_pc_num = ID_EX.ID_pc_num + ID_EX.extension_num;
-      return;
-    }
-    /*
-      JR - return address at R31
-     */
-    else if(JR == 9){
-      EX_MEM.EX_pc_num = reg[31];
-      return;
-    }
-    /*
-      JAL case
-     */
-    else if(ID_EX.ex_control.regWrite){
-      EX_MEM.ALU_result = ID_EX.ID_pc_num;
-      EX_MEM.num_reg_to_write = 31;
-      EX_MEM.EX_pc_num = ID_EX.jump_address;
-      return;
-    }
-    /*
-      Plain Jump case;
-     */
-    else
-      EX_MEM.EX_pc_num = ID_EX.jump_address;
-      return;
-  }
-  /*
-    Any other case that pc = pc + 4;
-   */
-  else
-    EX_MEM.EX_pc_num = ID_EX.ID_pc_num;
-    return;
-}
+
 
 /*
   Data Forwarding in ALU operations
@@ -731,9 +756,36 @@ void EX_pc_execute(unsigned int JR){
  */
 void DATA_FORWADING(){
     /*
+    Memory Data Forwarding
+      1. LOAD-SAVE CASE TYPE A AND B
+      2. LOAD-USE CASE TYPE A AND B
+    */
+    if(MEM_WB.writeback_control.regWrite && MEM_WB.rd_num !=0 && MEM_WB.writeback_control.MemtoReg && EX_MEM.mem_control.MemRead){
+      if(EX_MEM.num_reg_to_write == MEM_WB.rd_num){
+        EX_MEM.write_data = MEM_WB.mem_data;
+        return;
+      }
+      else if(EX_MEM.RS == MEM_WB.rd_num){
+        EX_MEM.ALU_result = MEM_WB.mem_data + EX_MEM.immediate_num;
+        return;
+      }
+    }
+
+    else if(MEM_WB.writeback_control.regWrite && MEM_WB.rd_num !=0 && MEM_WB.writeback_control.MemtoReg){
+      if(ID_EX.RS == MEM_WB.rd_num){
+        ID_EX.rs_value = MEM_WB.mem_data;
+        return;
+      }
+
+      else if(ID_EX.RT == MEM_WB.rd_num){
+        ID_EX.rt_value = MEM_WB.mem_data;
+        return;
+      }
+    }
+    /*
     MEM HAZARD
     */
-    if(MEM_WB.writeback_control.regWrite && MEM_WB.rd_num !=0){
+    else if(MEM_WB.writeback_control.regWrite && MEM_WB.rd_num !=0){
       /*
       Case 2-A
       */
@@ -768,20 +820,6 @@ void DATA_FORWADING(){
         return;
       }
     }
-    /*
-      Memory Data Forwarding
-     */
-    else if(MEM_WB.writeback_control.regWrite && MEM_WB.rd_num !=0 && MEM_WB.writeback_control.MemtoReg){
-      if(ID_EX.RS == MEM_WB.rd_num){
-        ID_EX.rs_value = MEM_WB.mem_data;
-        return;
-      }
-
-      else if(ID_EX.RT == MEM_WB.rd_num){
-        ID_EX.rt_value = MEM_WB.mem_data;
-        return;
-      }
-    }
 }
 
 /*
@@ -792,12 +830,13 @@ void DATA_FORWADING(){
 
  */
 void TROMM(){
+  // If MEM write is TRUE, LOAD STORE CASE which is just only data forwarding needed not by stalling
   if(EX_MEM.mem_control.MemRead){
-    if(ID_EX.RS == EX_MEM.num_reg_to_write){
+    if(ID_EX.RS == EX_MEM.num_reg_to_write && !ID_EX.ex_control.MemWrite){
       ID_EX.ex_control.stall = TRUE;
       return;
     }
-    else if(ID_EX.RT == EX_MEM.num_reg_to_write){
+    else if(ID_EX.RT == EX_MEM.num_reg_to_write && !ID_EX.ex_control.MemWrite){
       ID_EX.ex_control.stall = TRUE;
     }
   }
@@ -805,6 +844,18 @@ void TROMM(){
     ID_EX.ex_control.stall = FALSE;
   }
 
+}
+
+void BRANCH_TAKER(){
+  if(EX_MEM.branch_control){
+    BRANCH_INDICATOR.prediction = TRUE;
+    BRANCH_INDICATOR.taken_address = EX_MEM.EX_pc_num + EX_MEM.immediate_num;
+    return;
+  }
+  else{
+    BRANCH_INDICATOR.prediction = FALSE;
+    return;
+  }
 }
 /*
   Status printing
@@ -846,8 +897,14 @@ void code_insertion(FILE *fp, int code[]){
 
 void code_execution(int code[], int mode, int c){
     if(mode == 0){
-      if(EX_MEM.mem_control.PCSrc){
-        program_counter = EX_MEM.EX_pc_num;
+      if(ID_EX.jump_control){
+        program_counter = ID_EX.jump_address + 1;
+        cur_status.cur_PC = program_counter*4;
+        IF_ID.instruction = code[ID_EX.jump_address];
+        IF_ID.IF_pc_num = ID_EX.jump_address + 1;
+      }
+      else if(BRANCH_INDICATOR.prediction){
+        program_counter = BRANCH_INDICATOR.taken_address;
         cur_status.cur_PC = program_counter*4;
       }
       else{
@@ -866,7 +923,6 @@ void code_execution(int code[], int mode, int c){
         cur_status.cur_reg[reg_iter] = reg[reg_iter];
       }
       print_status();
-      // return program_counter;
     }
     else if(mode == 1){
       /*
@@ -874,9 +930,15 @@ void code_execution(int code[], int mode, int c){
        */
       cur_status.cur_PC = program_counter*4; // not Updated PC - only valid at stalling.
       if(!ID_EX.ex_control.stall){
-        if(EX_MEM.mem_control.PCSrc){
-          program_counter = EX_MEM.EX_pc_num;
-          cur_status.cur_PC = program_counter*4; // Updated PC
+        if(ID_EX.jump_control){
+          program_counter = ID_EX.jump_address + 1;
+          cur_status.cur_PC = program_counter*4;
+          IF_ID.instruction = code[ID_EX.jump_address];
+          IF_ID.IF_pc_num = ID_EX.jump_address + 1;
+        }
+        else if(BRANCH_INDICATOR.prediction){
+          program_counter = BRANCH_INDICATOR.taken_address;
+          cur_status.cur_PC = program_counter*4;
         }
         else{
           program_counter = IF_ID.IF_pc_num;
@@ -887,11 +949,10 @@ void code_execution(int code[], int mode, int c){
       MEM();
       EX();
       ID();
-      DATA_FORWADING();
       IF(code, program_counter);
+      DATA_FORWADING();
       cur_status.cur_instruction = IF_ID.instruction;
       cur_status.cur_cycle = c;
       print_status();
-      // return program_counter;
     }
 }
