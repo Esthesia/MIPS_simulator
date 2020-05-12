@@ -382,13 +382,17 @@ void EX(){
     EX_MEM.num_reg_to_write = 31;
   }
   EX_MEM.branch_control = EX_MEM.mem_control.PCSrc & EX_MEM.zero_flag;
+  printf("PCSRC CONTROL IS %d!!!!!!!!!!!!\n",EX_MEM.mem_control.PCSrc);
+  printf("ZERO CONTROL IS %d!!!!!!!!!!!!\n",EX_MEM.zero_flag);
+  printf("BRANCH CONTROL IS %d!!!!!!!!!!!!\n",EX_MEM.branch_control);
 }
 
 void MEM(){
   // IO_size unit of bits
   int IO_size;
-  int memory_address = EX_MEM.ALU_result / 4;
-  int access_point = EX_MEM.ALU_result % 4;
+  int memory_adresss_32 = EX_MEM.ALU_result;
+  int memory_address = (memory_adresss_32 & 0x0000FFFF) / 4;
+  int access_point = (memory_adresss_32 & 0x0000FFFF) % 4;
   int temp_mem_val;
   MEM_WB.MEM_instruction = EX_MEM.EX_instruction;
   printf("MEM STAGE instruction is %0X\n",MEM_WB.MEM_instruction); //DEBUGGING
@@ -427,7 +431,7 @@ void MEM(){
    */
   else if(EX_MEM.mem_control.MemRead){
     MEM_WB.R_W = 0;
-    MEM_WB.mem_address = EX_MEM.ALU_result;
+    MEM_WB.mem_address = EX_MEM.ALU_result & 0x0000FFFF;
     MEM_WB.MEM_IO_FLAG = TRUE;
     MEM_WB.writeback_control.regWrite = TRUE;
     MEM_WB.writeback_control.MemtoReg = TRUE;
@@ -526,7 +530,7 @@ void MEM(){
    */
   else if(EX_MEM.mem_control.MemWrite){
     MEM_WB.R_W = 1;
-    MEM_WB.mem_address = EX_MEM.ALU_result;
+    MEM_WB.mem_address = EX_MEM.ALU_result & 0x0000FFFF;
     MEM_WB.MEM_IO_FLAG = TRUE;
     MEM_WB.write_val = EX_MEM.write_data;
     int memory_value = static_memory[memory_address];
@@ -734,6 +738,8 @@ int ALU_execute(unsigned int op_, unsigned int shift_num, int ALU_con, int read_
     // Branch case - ALU Src value is false + plain subtract arithmetic operation
     //               if value is zero, make EX_MEM.zero_flag TRUE, otherwise, default = FALSE.
     execution_output = read_data_1 - read_data_2;
+    if(read_data_1 == 0 && read_data_2 == 0)
+      EX_MEM.zero_flag = TRUE;
     printf("EXECUTION OUTPUT WHEN MINUS IS %d\n",execution_output);
     if(execution_output == 0)
       EX_MEM.zero_flag = TRUE;
@@ -742,10 +748,10 @@ int ALU_execute(unsigned int op_, unsigned int shift_num, int ALU_con, int read_
        */
     if(op_ == 5 && execution_output == 0)
       EX_MEM.zero_flag = FALSE;
+    if(execution_output != 0)
+      EX_MEM.zero_flag = FALSE;
     if(op_ == 5 && execution_output != 0)
       EX_MEM.zero_flag = TRUE;
-    else
-      EX_MEM.zero_flag = FALSE;
     return execution_output;
   }
   else if(ALU_con == 7){
@@ -895,6 +901,7 @@ void BRANCH_TAKER(){
   else if(EX_MEM.branch_control){
     BRANCH_INDICATOR.prediction = TRUE;
     BRANCH_INDICATOR.taken_address = EX_MEM.EX_pc_num + EX_MEM.immediate_num;
+    printf("BRANCH CONTROL ON \n THE ADDRESS IS %08X\n", BRANCH_INDICATOR.taken_address);
     return;
   }
   else{
@@ -980,28 +987,27 @@ void code_execution(int code[], int mode, int c){
     }
     else if(mode == 1){
       /*
-        STALL flag on - NO UPDATE
-       */
+      STALL flag on - NO UPDATE
+      */
       if(ID_EX.ex_control.stall){
         cur_status.cur_PC = program_counter*4; // not Updated PC - only valid at stalling.
       }
-      if(!ID_EX.ex_control.stall){
-        if(ID_EX.jump_control){
-          program_counter = ID_EX.jump_address;
-          cur_status.cur_PC = program_counter*4;
-          IF_ID.instruction = 0;
-          IF_ID.IF_pc_num = 0;
-        }
-        else if(BRANCH_INDICATOR.prediction){
-          program_counter = BRANCH_INDICATOR.taken_address;
-          cur_status.cur_PC = program_counter*4;
-          BRANCH_INDICATOR.prediction = FALSE; //  바꾸기 다 쓰고
-        }
-        else{
-          program_counter = IF_ID.IF_pc_num;
-          cur_status.cur_PC = program_counter*4; // Updated PC
-        }
+      if(ID_EX.jump_control){
+        program_counter = ID_EX.jump_address;
+        cur_status.cur_PC = program_counter*4;
+        IF_ID.instruction = 0;
+        IF_ID.IF_pc_num = 0;
       }
+      if(BRANCH_INDICATOR.prediction){
+        program_counter = BRANCH_INDICATOR.taken_address;
+        cur_status.cur_PC = program_counter*4;
+        BRANCH_INDICATOR.prediction = FALSE; //  바꾸기 다 쓰고
+      }
+      else{
+        program_counter = IF_ID.IF_pc_num;
+        cur_status.cur_PC = program_counter*4; // Updated PC
+      }
+
       WB();
       MEM();
       EX();
