@@ -3,6 +3,7 @@
  */
 typedef enum {FALSE, TRUE} bool;
 
+
 typedef struct __BRANCH {
   bool prediction;
   unsigned int taken_address;
@@ -35,11 +36,13 @@ typedef struct __WB_CONTROL {
 } WB_CON;
 
 typedef struct __IF_ID {
+  bool ID_flushing;
   unsigned int IF_pc_num;
   int instruction;
 } _IF_ID;
 
 typedef struct __ID_EX {
+  unsigned int ID_instruction; //DEBUGGING
   EX_CON ex_control;
   unsigned int ID_pc_num;
   int ID_op_code;
@@ -55,6 +58,7 @@ typedef struct __ID_EX {
 } _ID_EX;
 
 typedef struct __EX_MEM {
+  unsigned int EX_instruction; //DEBUGGING
   MEM_CON mem_control;
   unsigned int EX_pc_num;
   int EX_op_code;
@@ -71,11 +75,19 @@ typedef struct __EX_MEM {
 } _EX_MEM;
 
 typedef struct __MEM_WB {
+  unsigned int MEM_instruction; //DEBUGGING
   WB_CON writeback_control;
   int size_of_IO;
   int mem_data;
   int ALU_result;
   int rd_num; // MEM/WB.RegisterRd in Data forwarding case
+  /*
+    FOR MEMORY I/O PRINTING
+   */
+   int R_W;
+   int mem_address;
+   bool MEM_IO_FLAG;
+   int write_val;
 } _MEM_WB;
 
 typedef struct __status {
