@@ -458,17 +458,17 @@ void MEM(){
       IO_size = 8;
       temp_mem_val = static_memory[memory_address];
       // 0 : access Most significant byte - 3: access Least significant byte
-      if(access_point == 0){
+      if(access_point == 3){
         MEM_WB.mem_data = temp_mem_val >> 24;
         MEM_WB.size_of_IO = IO_size / 8;
         return;
       }
-      else if(access_point == 1){
+      else if(access_point == 2){
         MEM_WB.mem_data = (temp_mem_val << 8) >> 24;
         MEM_WB.size_of_IO = IO_size / 8;
         return;
       }
-      else if(access_point == 2){
+      else if(access_point == 1){
         MEM_WB.mem_data = (temp_mem_val << 16) >> 24;
         MEM_WB.size_of_IO = IO_size / 8;
         return;
@@ -483,17 +483,17 @@ void MEM(){
     else if(EX_MEM.EX_op_code == 36){
       IO_size = 8;
       temp_mem_val = static_memory[memory_address];
-      if(access_point == 0){
+      if(access_point == 3){
         MEM_WB.mem_data = ((unsigned int)temp_mem_val) >> 24;
         MEM_WB.size_of_IO = IO_size / 8;
         return;
       }
-      else if(access_point == 1){
+      else if(access_point == 2){
         MEM_WB.mem_data = ((unsigned int)temp_mem_val << 8) >> 24;
         MEM_WB.size_of_IO = IO_size / 8;
         return;
       }
-      else if(access_point == 2){
+      else if(access_point == 1){
         MEM_WB.mem_data = ((unsigned int)temp_mem_val << 16) >> 24;
         MEM_WB.size_of_IO = IO_size / 8;
         return;
@@ -508,7 +508,7 @@ void MEM(){
       IO_size = 16;
       temp_mem_val = static_memory[memory_address];
       // 0 : access upper half / 2 : access lower half
-      if(access_point == 0){
+      if(access_point == 1){
         MEM_WB.mem_data = temp_mem_val >> IO_size;
         MEM_WB.size_of_IO = IO_size / 8;
         return;
@@ -523,7 +523,7 @@ void MEM(){
     else if(EX_MEM.EX_op_code == 37){
       IO_size = 16;
       temp_mem_val = static_memory[memory_address];
-      if(access_point == 0){
+      if(access_point == 1){
         MEM_WB.mem_data = ((unsigned int)temp_mem_val) >> IO_size;
         MEM_WB.size_of_IO = IO_size / 8;
         return;
@@ -558,19 +558,19 @@ void MEM(){
     if(EX_MEM.EX_op_code == 40){
       IO_size = 8;
       temp_mem_val = EX_MEM.write_data;
-      if(access_point == 0){
+      if(access_point == 3){
         temp_mem_val = temp_mem_val & 0xF000;
         static_memory[memory_address] = (memory_value & 0x0FFF) | temp_mem_val;
         MEM_WB.size_of_IO = IO_size / 8;
         return;
       }
-      else if(access_point == 1){
+      else if(access_point == 2){
         temp_mem_val = temp_mem_val & 0x0F00;
         static_memory[memory_address] = (memory_value & 0xF0FF) | temp_mem_val;
         MEM_WB.size_of_IO = IO_size / 8;
         return;
       }
-      else if(access_point == 2){
+      else if(access_point == 1){
         temp_mem_val = temp_mem_val & 0x00F0;
         static_memory[memory_address] = (memory_value & 0xFF0F) | temp_mem_val;
         MEM_WB.size_of_IO = IO_size / 8;
@@ -585,7 +585,7 @@ void MEM(){
     }
     else if(EX_MEM.EX_op_code == 41){
       IO_size = 16;
-      if(access_point == 0){
+      if(access_point == 1){
         temp_mem_val = temp_mem_val & 0xFF00;
         static_memory[memory_address] = (memory_value & 0x00FF) | temp_mem_val;
         return;
@@ -825,7 +825,7 @@ void DATA_FORWADING(){
       1. LOAD-SAVE CASE TYPE A AND B
       2. LOAD-USE CASE TYPE A AND B
     */
-    if(MEM_WB.writeback_control.regWrite && MEM_WB.rd_num !=0 && MEM_WB.writeback_control.MemtoReg && EX_MEM.mem_control.MemRead){
+    if(MEM_WB.writeback_control.regWrite && MEM_WB.rd_num !=0 && MEM_WB.writeback_control.MemtoReg){
       if(EX_MEM.num_reg_to_write == MEM_WB.rd_num){
         EX_MEM.write_data = MEM_WB.mem_data;
         printf("LOAD DATA TO SAVE : FORWARDING WIRTE DATA %08X to the register %d\n", EX_MEM.write_data, EX_MEM.num_reg_to_write);
