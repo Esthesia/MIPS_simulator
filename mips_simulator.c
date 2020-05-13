@@ -1005,6 +1005,7 @@ void code_execution(int code[], int mode, int c){
       STALL flag on - NO UPDATE
       */
       if(ID_EX.ex_control.stall){
+        printf("!!! NEED STALL !!!\n");
         cur_status.cur_PC = program_counter*4; // not Updated PC - only valid at stalling.
       }
       if(ID_EX.jump_control){
@@ -1019,7 +1020,8 @@ void code_execution(int code[], int mode, int c){
         cur_status.cur_PC = program_counter*4;
         BRANCH_INDICATOR.prediction = FALSE; //  바꾸기 다 쓰고
       }
-      else{
+      else if(!ID_EX.ex_control.stall && !BRANCH_INDICATOR.prediction && !ID_EX.jump_control){
+        printf("!!! NEXT PC !!!\n");
         program_counter = IF_ID.IF_pc_num;
         cur_status.cur_PC = program_counter*4; // Updated PC
       }
