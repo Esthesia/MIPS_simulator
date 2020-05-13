@@ -129,7 +129,7 @@ void ID(){
     ID_INST = IF_ID.instruction;
     ID_EX.ID_pc_num = IF_ID.IF_pc_num;
   }
-  // printf("ID STAGE instruction is %08X\n",ID_INST); //DEBUGGING
+  printf("ID STAGE instruction is %08X\n",ID_INST); //DEBUGGING
   unsigned int op_code = ID_INST >> 26;
   unsigned int rs = (ID_INST << 6) >> 27;
   unsigned int rt = (ID_INST << 11) >> 27;
@@ -148,8 +148,9 @@ void ID(){
   ID_EX.ID_instruction = ID_INST; //DEBUGGING
   /*
     CHECK PREDICTION RIGHT OR WRONG
+    IF NO FLUSHING, SUM CANNOT WORK WELL
    */
-  if(BRANCH_INDICATOR.prediction){
+  if(BRANCH_INDICATOR.prediction || IF_ID.ID_flushing){
     ID_EX.ex_control.regDst = FALSE;
     ID_EX.ex_control.ALUSrc = FALSE;
     ID_EX.ex_control.PCSrc = FALSE;
@@ -160,12 +161,12 @@ void ID(){
     ID_EX.ex_control.ALUop_1 = FALSE;
     ID_EX.ex_control.stall = FALSE;
     ID_EX.jump_control = FALSE;
-    // printf("FLUSHING\n");
+    printf("FLUSHING\n");
     // BRANCH_INDICATOR.prediction = FALSE; // false 로 바꾸기
     return;
   }
   if(ID_EX.jump_control){
-    // printf("!!!PREVIOUS STEP IS JUMP SO FLUSHING\n");
+    printf("!!!PREVIOUS STEP IS JUMP SO FLUSHING\n");
     ID_EX.ex_control.regDst = FALSE;
     ID_EX.ex_control.ALUSrc = FALSE;
     ID_EX.ex_control.PCSrc = FALSE;
@@ -197,7 +198,7 @@ void ID(){
       ID_EX.ex_control.MemtoReg = FALSE;
       ID_EX.ex_control.ALUop_0 = TRUE;
       ID_EX.ex_control.ALUop_1 = FALSE;
-      ID_EX.jump_address = reg[31]; // RETURN ADDRESS ASSIGNING
+      ID_EX.jump_address = reg[31] / 4; // RETURN ADDRESS ASSIGNING
       /*
         AFTER DECODING, CHECK FOR HAZARD AND CHOICE TO MAKE BUBBLE.
        */
@@ -333,7 +334,7 @@ void EX(){
     EX_MEM.branch_control = EX_MEM.mem_control.PCSrc & EX_MEM.zero_flag;
     return;
   }
-  // printf("EX STAGE instruction is %08X\n", EX_MEM.EX_instruction); //DEBUGGING
+  printf("EX STAGE instruction is %08X\n", EX_MEM.EX_instruction); //DEBUGGING
   /*
     PREDICTION FAILURE
    */
@@ -380,8 +381,8 @@ void EX(){
    */
   if(ID_EX.ex_control.ALUSrc)
     ALU_input_2 = ID_EX.extension_num;
-  // if(ID_EX.ID_op_code == 0 && funct == 0 || funct == 2)
-  //   ALU_input_1 = ID_EX.rt_value;
+  if(ID_EX.ID_op_code == 0 && (funct == 0 || funct == 2))
+    ALU_input_1 = ID_EX.rt_value;
   // printf("RT VALUE OR IMMEDIATE IS %08X\n",ALU_input_2);
   int ALU_output = ALU_execute(ex_op, shamt, ALU_control_output, ALU_input_1, ALU_input_2);
   if(ID_EX.ex_control.regDst)
@@ -394,7 +395,7 @@ void EX(){
     JAL case
    */
   if(ID_EX.ex_control.regWrite && ID_EX.jump_control){
-    EX_MEM.ALU_result = ID_EX.ID_pc_num;
+    EX_MEM.ALU_result = ID_EX.ID_pc_num * 4;
     EX_MEM.num_reg_to_write = 31;
   }
   EX_MEM.branch_control = EX_MEM.mem_control.PCSrc & EX_MEM.zero_flag & !ID_EX.jump_control;
@@ -411,7 +412,7 @@ void MEM(){
   int access_point = (memory_adresss_32 & 0x0000FFFF) % 4;
   int temp_mem_val;
   MEM_WB.MEM_instruction = EX_MEM.EX_instruction;
-  // printf("MEM STAGE instruction is %0X\n",MEM_WB.MEM_instruction); //DEBUGGING
+  printf("MEM STAGE instruction is %0X\n",MEM_WB.MEM_instruction); //DEBUGGING
   // printf("MEM STAGE ALU RESULT IS %d\n", EX_MEM.ALU_result);
   /*
     BRANCH TAKER check whether or not prediction is RIGHT
@@ -607,8 +608,8 @@ void MEM(){
 
 void WB(){
   int destination_register = MEM_WB.rd_num;
-  // printf("WB ALU result is %d to the register %d\n", MEM_WB.ALU_result, MEM_WB.rd_num); //DEBUGGING
-  // printf("WB STAGE instruction is %0X\n",MEM_WB.MEM_instruction);
+  printf("WB STAGE instruction is %0X\n",MEM_WB.MEM_instruction);
+  printf("WB ALU result is %d to the register %d\n", MEM_WB.ALU_result, MEM_WB.rd_num); //DEBUGGING
   /*
     No Register Write == No need to process WB stage
    */
@@ -756,8 +757,7 @@ int ALU_execute(unsigned int op_, unsigned int shift_num, int ALU_con, int read_
     // Branch case - ALU Src value is false + plain subtract arithmetic operation
     //               if value is zero, make EX_MEM.zero_flag TRUE, otherwise, default = FALSE.
     execution_output = read_data_1 - read_data_2;
-    if(read_data_1 == 0 && read_data_2 == 0)
-      EX_MEM.zero_flag = TRUE;
+
     // printf("EXECUTION OUTPUT WHEN MINUS IS %d\n",execution_output);
     if(execution_output == 0)
       EX_MEM.zero_flag = TRUE;
@@ -787,12 +787,12 @@ int ALU_execute(unsigned int op_, unsigned int shift_num, int ALU_con, int read_
       return 0;
   }
   else if(ALU_con == 9){
-    execution_output = read_data_2 << shift_num;
+    execution_output = read_data_1 << shift_num;
     // printf("SHIFT LEFT LOGICAL CASE %08X to %d\n",read_data_2, shift_num);
     return execution_output;
   }
   else if(ALU_con == 10){
-    execution_output = ((unsigned int)read_data_2) >> shift_num;
+    execution_output = ((unsigned int)read_data_1) >> shift_num;
     return execution_output;
   }
   else if(ALU_con == 12){
@@ -921,7 +921,7 @@ void BRANCH_TAKER(){
     BRANCH_INDICATOR.prediction = FALSE;
     return;
   }
-  if(EX_MEM.branch_control){
+  else if(EX_MEM.branch_control){
     BRANCH_INDICATOR.prediction = TRUE;
     BRANCH_INDICATOR.taken_address = EX_MEM.EX_pc_num + EX_MEM.immediate_num;
     // printf("BRANCH CONTROL ON \n THE ADDRESS IS %08X\n", BRANCH_INDICATOR.taken_address);
@@ -942,7 +942,8 @@ void print_status(){
   printf("Registers:\n");
   int register_iter;
   for(register_iter = 0; register_iter < 32; register_iter ++){
-    register_print(register_iter, cur_status.cur_reg[register_iter]);
+    if(cur_status.cur_reg[register_iter] != 0)
+      register_print(register_iter, cur_status.cur_reg[register_iter]);
   }
   if(MEM_WB.MEM_IO_FLAG){
     if(MEM_WB.R_W == 0){ // READ
