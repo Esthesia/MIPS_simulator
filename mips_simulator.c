@@ -770,10 +770,11 @@ int ALU_execute(unsigned int op_, unsigned int shift_num, int ALU_con, int read_
   }
   else if(ALU_con == 9){
     execution_output = read_data_1 << shift_num;
+    printf("SHIFT LEFT LOGICAL CASE %08X to %d\n",read_data_1, shift_num);
     return execution_output;
   }
   else if(ALU_con == 10){
-    execution_output = (unsigned int)read_data_1 >> shift_num;
+    execution_output = ((unsigned int)read_data_1) >> shift_num;
     return execution_output;
   }
   else if(ALU_con == 12){
@@ -993,12 +994,13 @@ void code_execution(int code[], int mode, int c){
         cur_status.cur_PC = program_counter*4; // not Updated PC - only valid at stalling.
       }
       if(ID_EX.jump_control){
+        printf("CYCLE STARTED WITH JUMP ADDRESS %08X\n",ID_EX.jump_address);
         program_counter = ID_EX.jump_address;
         cur_status.cur_PC = program_counter*4;
         IF_ID.instruction = 0;
         IF_ID.IF_pc_num = 0;
       }
-      if(BRANCH_INDICATOR.prediction){
+      else if(BRANCH_INDICATOR.prediction){
         program_counter = BRANCH_INDICATOR.taken_address;
         cur_status.cur_PC = program_counter*4;
         BRANCH_INDICATOR.prediction = FALSE; //  바꾸기 다 쓰고
@@ -1007,7 +1009,7 @@ void code_execution(int code[], int mode, int c){
         program_counter = IF_ID.IF_pc_num;
         cur_status.cur_PC = program_counter*4; // Updated PC
       }
-
+      printf("CYCLE STARTED WITH JUMP ADDRESS %08X\n",program_counter);
       WB();
       MEM();
       EX();
