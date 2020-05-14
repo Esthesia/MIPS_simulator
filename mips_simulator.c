@@ -16,6 +16,7 @@ int static_memory[16384];
 int reg[32];
 int program_counter = 0;
 int instruction[16384];
+int mode;
 /*
   Inter Stage Structure and printing structure.
  */
@@ -57,18 +58,12 @@ int main(int argc, char *argv[]){
   /*
     File reading for running instruction
    */
-  unsigned int file_size;
-  unsigned int number_of_instruction;
   int cycle_num;
-  int mode;
   FILE *instruction_file;
   instruction_file = fopen(argv[1], "r");
   cycle_num = atoi(argv[2]);
   mode = atoi(argv[3]);
-  fseek(instruction_file, 0, SEEK_END);
-  file_size = ftell(instruction_file);
-  number_of_instruction = file_size / 10;
-  fseek(instruction_file, 0, SEEK_SET);
+
   /*
     file insertion to execute simualtor and file close
    */
@@ -156,12 +151,12 @@ void ID(){
     ID_EX.ex_control.PCSrc = FALSE;
     ID_EX.ex_control.MemRead = FALSE;
     ID_EX.ex_control.MemWrite = FALSE;
+    ID_EX.ex_control.regWrite = FALSE;
     ID_EX.ex_control.MemtoReg = FALSE;
     ID_EX.ex_control.ALUop_0 = FALSE;
     ID_EX.ex_control.ALUop_1 = FALSE;
     ID_EX.ex_control.stall = FALSE;
     ID_EX.jump_control = FALSE;
-    // printf("FLUSHING\n");
     // BRANCH_INDICATOR.prediction = FALSE; // false 로 바꾸기
     return;
   }
@@ -199,7 +194,7 @@ void ID(){
       ID_EX.ex_control.ALUop_0 = TRUE;
       ID_EX.ex_control.ALUop_1 = FALSE;
       ID_EX.jump_address = reg[31] / 4; // RETURN ADDRESS ASSIGNING
-      if(MEM_WB.writeback_control.MemtoReg & MEM_WB.rd_num == 31)
+      if(MEM_WB.writeback_control.MemtoReg && MEM_WB.rd_num == 31)
         ID_EX.jump_address = MEM_WB.mem_data / 4;
       /*
         AFTER DECODING, CHECK FOR HAZARD AND CHOICE TO MAKE BUBBLE.
@@ -383,8 +378,9 @@ void EX(){
    */
   if(ID_EX.ex_control.ALUSrc)
     ALU_input_2 = ID_EX.extension_num;
-  if(ID_EX.ID_op_code == 0 && (funct == 0 || funct == 2))
+  if(ID_EX.ID_op_code == 0 && (funct == 0 || funct == 2)){
     ALU_input_1 = ID_EX.rt_value;
+  }
   // printf("RT VALUE OR IMMEDIATE IS %08X\n",ALU_input_2);
   int ALU_output = ALU_execute(ex_op, shamt, ALU_control_output, ALU_input_1, ALU_input_2);
   if(ID_EX.ex_control.regDst)
@@ -412,7 +408,7 @@ void MEM(){
   int memory_adresss_32 = EX_MEM.ALU_result;
   int memory_address = (memory_adresss_32 & 0x0000FFFF) / 4;
   int access_point = (memory_adresss_32 & 0x0000FFFF) % 4;
-  int temp_mem_val;
+  int temp_mem_val = 0;
   MEM_WB.MEM_instruction = EX_MEM.EX_instruction;
   // printf("MEM STAGE instruction is %0X\n",MEM_WB.MEM_instruction); //DEBUGGING
   // printf("MEM STAGE ALU RESULT IS %d\n", EX_MEM.ALU_result);
@@ -433,7 +429,7 @@ void MEM(){
       return;
     }
     // no memory I/O
-    else{
+    else if(EX_MEM.mem_control.regWrite){
       MEM_WB.writeback_control.regWrite = TRUE;
       MEM_WB.writeback_control.MemtoReg = FALSE;
       MEM_WB.mem_data = 0;
@@ -621,7 +617,7 @@ void WB(){
   /*
     Register Write
    */
-  else{
+  else if(MEM_WB.writeback_control.regWrite){
     /*
       Memory Data to target Register
      */
@@ -734,6 +730,7 @@ int ALU_control(unsigned int function_code, int op, bool op_0, bool op_1){
       return ret_val;
     }
   }
+  return 0;
 }
 
 /*
@@ -805,6 +802,7 @@ int ALU_execute(unsigned int op_, unsigned int shift_num, int ALU_con, int read_
     execution_output = read_data_2 << 16;
     return execution_output;
   }
+  return 0;
 }
 
 /*
@@ -903,6 +901,8 @@ void DATA_FORWADING(){
  */
 void TROMM(){
   // If MEM write is TRUE, LOAD STORE CASE which is just only data forwarding needed not by stalling
+  if(mode == 0)
+    return;
   if(EX_MEM.mem_control.MemRead){
     if(ID_EX.RS == EX_MEM.num_reg_to_write && !ID_EX.ex_control.MemWrite){
       ID_EX.ex_control.stall = TRUE;
@@ -949,10 +949,10 @@ void print_status(){
   }
   if(MEM_WB.MEM_IO_FLAG){
     if(MEM_WB.R_W == 0){ // READ
-      printf("Memory I/O: R %d %04X %X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data);
+      printf("Memory I/O: R %d %04X %02X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data);
     }
     if(MEM_WB.R_W == 1){ // WRITE
-      printf("Memory I/O: W %d %04X %X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val);
+      printf("Memory I/O: W %d %04X %02X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val);
     }
   }
   else
@@ -985,7 +985,7 @@ void code_execution(int code[], int mode, int c){
         program_counter = BRANCH_INDICATOR.taken_address;
         cur_status.cur_PC = program_counter*4;
       }
-      else{
+      else if(!BRANCH_INDICATOR.prediction && !ID_EX.jump_control){
         program_counter = IF_ID.IF_pc_num;
         cur_status.cur_PC = program_counter*4;
       }
@@ -993,7 +993,7 @@ void code_execution(int code[], int mode, int c){
       MEM();
       EX();
       ID();
-      IF(code, program_counter);
+      IF((unsigned int*)code, program_counter);
       cur_status.cur_instruction = IF_ID.instruction;
       cur_status.cur_cycle = c;
       int reg_iter;
@@ -1032,7 +1032,7 @@ void code_execution(int code[], int mode, int c){
       MEM();
       EX();
       ID();
-      IF(code, program_counter);
+      IF((unsigned int*)code, program_counter);
       DATA_FORWADING();
       cur_status.cur_instruction = IF_ID.instruction;
       cur_status.cur_cycle = c;

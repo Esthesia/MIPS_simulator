@@ -38,7 +38,7 @@ typedef struct __WB_CONTROL {
 typedef struct __IF_ID {
   bool ID_flushing;
   unsigned int IF_pc_num;
-  int instruction;
+  unsigned int instruction;
 } _IF_ID;
 
 typedef struct __ID_EX {
