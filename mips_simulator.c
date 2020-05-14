@@ -199,6 +199,8 @@ void ID(){
       ID_EX.ex_control.ALUop_0 = TRUE;
       ID_EX.ex_control.ALUop_1 = FALSE;
       ID_EX.jump_address = reg[31] / 4; // RETURN ADDRESS ASSIGNING
+      if(MEM_WB.writeback_control.MemtoReg & MEM_WB.rd_num == 31)
+        ID_EX.jump_address = MEM_WB.mem_data / 4;
       /*
         AFTER DECODING, CHECK FOR HAZARD AND CHOICE TO MAKE BUBBLE.
        */
@@ -947,10 +949,10 @@ void print_status(){
   }
   if(MEM_WB.MEM_IO_FLAG){
     if(MEM_WB.R_W == 0){ // READ
-      printf("Memory I/O: R %d %04X %04X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data);
+      printf("Memory I/O: R %d %04X %X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data);
     }
     if(MEM_WB.R_W == 1){ // WRITE
-      printf("Memory I/O: W %d %04X %04X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val);
+      printf("Memory I/O: W %d %04X %X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val);
     }
   }
   else
