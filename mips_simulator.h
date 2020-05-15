@@ -42,7 +42,7 @@ typedef struct __IF_ID {
 } _IF_ID;
 
 typedef struct __ID_EX {
-  unsigned int ID_instruction; //DEBUGGING
+  unsigned int ID_instruction;
   EX_CON ex_control;
   unsigned int ID_pc_num;
   int ID_op_code;
@@ -58,7 +58,7 @@ typedef struct __ID_EX {
 } _ID_EX;
 
 typedef struct __EX_MEM {
-  unsigned int EX_instruction; //DEBUGGING
+  unsigned int EX_instruction;
   MEM_CON mem_control;
   unsigned int EX_pc_num;
   int EX_op_code;
@@ -75,7 +75,7 @@ typedef struct __EX_MEM {
 } _EX_MEM;
 
 typedef struct __MEM_WB {
-  unsigned int MEM_instruction; //DEBUGGING
+  unsigned int MEM_instruction; 
   WB_CON writeback_control;
   int size_of_IO;
   int mem_data;

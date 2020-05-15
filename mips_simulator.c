@@ -43,11 +43,13 @@ void code_execution(int code[], int mode, int c);
 /*
   HAZARD DETECTION UNIT
     DATA_FORWARDING - data hazards handling in ALU instruction
-    TROMM - Load use case checking and make "Bubble"
+    LOAD_USE_CHECKER - Load use case checking and make "Bubble"
  */
+
 void DATA_FORWADING();
-void TROMM();
+void LOAD_USE_CHECKER();
 void BRANCH_TAKER();
+
 /*
 MAIN function
 1. File reading and dynamically allocate instruction memory to start.
@@ -63,7 +65,6 @@ int main(int argc, char *argv[]){
   instruction_file = fopen(argv[1], "r");
   cycle_num = atoi(argv[2]);
   mode = atoi(argv[3]);
-
   /*
     file insertion to execute simualtor and file close
    */
@@ -87,10 +88,7 @@ int main(int argc, char *argv[]){
   for(j = 1; j <= cycle_num; j++){
     code_execution(instruction, mode, j);
   }
-  // /*
-  //   free dynamic allocating memory.
-  //  */
-  // free(instruction);
+
   return 0;
 }
 
@@ -118,13 +116,11 @@ void ID(){
    */
   if(ID_EX.ex_control.stall){
     ID_INST = ID_EX.prev_instruction;
-    // printf("STALL OCCUR AT ID STAGE!!\n");
   }
   else{
     ID_INST = IF_ID.instruction;
     ID_EX.ID_pc_num = IF_ID.IF_pc_num;
   }
-  // printf("ID STAGE instruction is %08X\n",ID_INST); //DEBUGGING
   unsigned int op_code = ID_INST >> 26;
   unsigned int rs = (ID_INST << 6) >> 27;
   unsigned int rt = (ID_INST << 11) >> 27;
@@ -140,7 +136,7 @@ void ID(){
   ID_EX.extension_num = ((int)immediate_num << 16) >> 16; // immediate OR branch address
   ID_EX.jump_address = (ID_INST << 6) >> 6;
   ID_EX.prev_instruction = ID_INST;
-  ID_EX.ID_instruction = ID_INST; //DEBUGGING
+  ID_EX.ID_instruction = ID_INST;
   /*
     CHECK PREDICTION RIGHT OR WRONG
     IF NO FLUSHING, SUM CANNOT WORK WELL
@@ -157,11 +153,9 @@ void ID(){
     ID_EX.ex_control.ALUop_1 = FALSE;
     ID_EX.ex_control.stall = FALSE;
     ID_EX.jump_control = FALSE;
-    // BRANCH_INDICATOR.prediction = FALSE; // false 로 바꾸기
     return;
   }
   if(ID_EX.jump_control){
-    // printf("!!!PREVIOUS STEP IS JUMP SO FLUSHING\n");
     ID_EX.ex_control.regDst = FALSE;
     ID_EX.ex_control.ALUSrc = FALSE;
     ID_EX.ex_control.PCSrc = FALSE;
@@ -199,7 +193,7 @@ void ID(){
       /*
         AFTER DECODING, CHECK FOR HAZARD AND CHOICE TO MAKE BUBBLE.
        */
-      TROMM();
+      LOAD_USE_CHECKER();
       return;
     }
     else{
@@ -213,7 +207,7 @@ void ID(){
       ID_EX.ex_control.MemtoReg = FALSE;
       ID_EX.ex_control.ALUop_0 = FALSE;
       ID_EX.ex_control.ALUop_1 = TRUE;
-      TROMM();
+      LOAD_USE_CHECKER();
       return;
     }
   }
@@ -238,7 +232,7 @@ void ID(){
     ID_EX.ex_control.MemtoReg = FALSE;
     ID_EX.ex_control.ALUop_0 = TRUE;
     ID_EX.ex_control.ALUop_1 = FALSE;
-    TROMM();
+    LOAD_USE_CHECKER();
     return;
   }
   /*
@@ -256,7 +250,7 @@ void ID(){
     ID_EX.ex_control.MemtoReg = FALSE;
     ID_EX.ex_control.ALUop_0 = TRUE;
     ID_EX.ex_control.ALUop_1 = FALSE;
-    TROMM();
+    LOAD_USE_CHECKER();
     return;
   }
   /*
@@ -277,7 +271,7 @@ void ID(){
     {
       ID_EX.extension_num = (immediate_num & 0x0000FFFF);
     }
-    TROMM();
+    LOAD_USE_CHECKER();
     return;
   }
   /*
@@ -294,7 +288,7 @@ void ID(){
     ID_EX.ex_control.MemtoReg = TRUE;
     ID_EX.ex_control.ALUop_0 = FALSE;
     ID_EX.ex_control.ALUop_1 = FALSE;
-    TROMM();
+    LOAD_USE_CHECKER();
     return;
   }
   /*
@@ -311,7 +305,7 @@ void ID(){
     ID_EX.ex_control.MemtoReg = FALSE;
     ID_EX.ex_control.ALUop_0 = FALSE;
     ID_EX.ex_control.ALUop_1 = FALSE;
-    TROMM();
+    LOAD_USE_CHECKER();
     return;
   }
 
@@ -331,7 +325,6 @@ void EX(){
     EX_MEM.branch_control = EX_MEM.mem_control.PCSrc & EX_MEM.zero_flag;
     return;
   }
-  // printf("EX STAGE instruction is %08X\n", EX_MEM.EX_instruction); //DEBUGGING
   /*
     PREDICTION FAILURE
    */
@@ -344,7 +337,6 @@ void EX(){
     EX_MEM.branch_control = EX_MEM.mem_control.PCSrc & EX_MEM.zero_flag;
     return;
   }
-  // printf("BRANCH PREDICTION PASS\n");
   /*
     Control value assigning
    */
@@ -368,7 +360,6 @@ void EX(){
   int decision_RegDst;
   int ALU_control_output = ALU_control(funct, ex_op, ID_EX.ex_control.ALUop_0, ID_EX.ex_control.ALUop_1);
   int ALU_input_1 = ID_EX.rs_value;
-  // printf("RS VALUE IS %08X\n",ALU_input_1);
   int ALU_input_2 = ID_EX.rt_value;
 
 
@@ -381,7 +372,6 @@ void EX(){
   if(ID_EX.ID_op_code == 0 && (funct == 0 || funct == 2)){
     ALU_input_1 = ID_EX.rt_value;
   }
-  // printf("RT VALUE OR IMMEDIATE IS %08X\n",ALU_input_2);
   int ALU_output = ALU_execute(ex_op, shamt, ALU_control_output, ALU_input_1, ALU_input_2);
   if(ID_EX.ex_control.regDst)
     decision_RegDst = ID_EX.RD;
@@ -397,9 +387,6 @@ void EX(){
     EX_MEM.num_reg_to_write = 31;
   }
   EX_MEM.branch_control = EX_MEM.mem_control.PCSrc & EX_MEM.zero_flag & !ID_EX.jump_control;
-  // printf("PCSRC CONTROL IS %d!!!!!!!!!!!!\n",EX_MEM.mem_control.PCSrc);
-  // printf("ZERO CONTROL IS %d!!!!!!!!!!!!\n",EX_MEM.zero_flag);
-  // printf("BRANCH CONTROL IS %d!!!!!!!!!!!!\n",EX_MEM.branch_control);
 }
 
 void MEM(){
@@ -410,8 +397,6 @@ void MEM(){
   int access_point = (memory_adresss_32 & 0x0000FFFF) % 4;
   int temp_mem_val = 0;
   MEM_WB.MEM_instruction = EX_MEM.EX_instruction;
-  // printf("MEM STAGE instruction is %0X\n",MEM_WB.MEM_instruction); //DEBUGGING
-  // printf("MEM STAGE ALU RESULT IS %d\n", EX_MEM.ALU_result);
   /*
     BRANCH TAKER check whether or not prediction is RIGHT
     If right, just prediction unit to false to keep go on,
@@ -506,7 +491,7 @@ void MEM(){
       IO_size = 16;
       temp_mem_val = static_memory[memory_address];
       // 0 : access upper half / 2 : access lower half
-      if(access_point == 1){
+      if(access_point == 2){
         MEM_WB.mem_data = temp_mem_val >> IO_size;
         MEM_WB.size_of_IO = IO_size / 8;
         return;
@@ -521,7 +506,7 @@ void MEM(){
     else if(EX_MEM.EX_op_code == 37){
       IO_size = 16;
       temp_mem_val = static_memory[memory_address];
-      if(access_point == 1){
+      if(access_point == 2){
         MEM_WB.mem_data = ((unsigned int)temp_mem_val) >> IO_size;
         MEM_WB.size_of_IO = IO_size / 8;
         return;
@@ -606,8 +591,6 @@ void MEM(){
 
 void WB(){
   int destination_register = MEM_WB.rd_num;
-  // printf("WB STAGE instruction is %0X\n",MEM_WB.MEM_instruction);
-  // printf("WB ALU result is %d to the register %d\n", MEM_WB.ALU_result, MEM_WB.rd_num); //DEBUGGING
   /*
     No Register Write == No need to process WB stage
    */
@@ -694,12 +677,10 @@ int ALU_control(unsigned int function_code, int op, bool op_0, bool op_1){
       return ret_val;
     }
     else if(function_code == 0){
-      // printf("SLL CASE\n");
       ret_val = 9;  // SLL
       return ret_val;
     }
     else if(function_code == 2){
-      // printf("SRL CASE\n");
       ret_val = 10; // SRL
       return ret_val;
     }
@@ -739,7 +720,6 @@ int ALU_control(unsigned int function_code, int op, bool op_0, bool op_1){
 int ALU_execute(unsigned int op_, unsigned int shift_num, int ALU_con, int read_data_1, int read_data_2){
   int execution_output;
   EX_MEM.zero_flag = FALSE;
-  // printf("READ 1 data is %d and READ 2 data is %d\n", read_data_1, read_data_2);
   if(ALU_con == 0){
     execution_output = read_data_1 & read_data_2;
     return execution_output;
@@ -806,18 +786,9 @@ int ALU_execute(unsigned int op_, unsigned int shift_num, int ALU_con, int read_
 }
 
 /*
-  PC executor at EX stage what pc value choosing - JUMP/BRANCH case
-  if PCSrc in ID_EX TRUE, No use original updated PC(PC+4)
-  else just PC as usual that already in IF ID stage.
-  NOT IN EX STAGE SO DELETE IT -20200511
- */
-
-
-/*
   Data Forwarding in ALU operations
   Condition - EX/MEM.Regwrite , MEM/WB.Regwrite is TRUE and EX/MEM, MEM/WB Rd is not $zero
   + MEMREAD DATA FORWARDING
-
  */
 void DATA_FORWADING(){
     /*
@@ -828,23 +799,19 @@ void DATA_FORWADING(){
     if(MEM_WB.writeback_control.regWrite && MEM_WB.rd_num !=0 && MEM_WB.writeback_control.MemtoReg){
       if(EX_MEM.num_reg_to_write == MEM_WB.rd_num){
         EX_MEM.write_data = MEM_WB.mem_data;
-        // printf("LOAD DATA TO SAVE : FORWARDING WIRTE DATA %08X to the register %d\n", EX_MEM.write_data, EX_MEM.num_reg_to_write);
       }
       if(EX_MEM.RS == MEM_WB.rd_num){
         EX_MEM.ALU_result = MEM_WB.mem_data + EX_MEM.immediate_num;
-        // printf("LOAD DATA TO ADDRESS : ADDRESS %08X to the register %d\n", EX_MEM.ALU_result, EX_MEM.RS);
       }
     }
 
     if(MEM_WB.writeback_control.regWrite && MEM_WB.rd_num !=0 && MEM_WB.writeback_control.MemtoReg){
       if(ID_EX.RS == MEM_WB.rd_num){
         ID_EX.rs_value = MEM_WB.mem_data;
-        // printf("LOAD DATA TO USE RS : FORWARDING RS VALUE IS %08X to the register %d\n", ID_EX.rs_value, ID_EX.RS);
       }
 
       if(ID_EX.RT == MEM_WB.rd_num){
         ID_EX.rt_value = MEM_WB.mem_data;
-        // printf("LOAD DATA TO USE RT : FORWARDING RS VALUE IS %08X to the register %d\n", ID_EX.rt_value, ID_EX.RT);
       }
     }
     /*
@@ -856,16 +823,12 @@ void DATA_FORWADING(){
       */
       if(ID_EX.RS == MEM_WB.rd_num){
         ID_EX.rs_value = MEM_WB.ALU_result;
-        // printf("MEM TO ID :FORWARDING RS VALUE IS %08X to the register %d\n", ID_EX.rs_value, ID_EX.RS); //DEBUGGING
-        // printf("%08X\n", ID_EX.prev_instruction);
       }
       /*
       Case 2-B
       */
       if(ID_EX.RT == MEM_WB.rd_num){
         ID_EX.rt_value = MEM_WB.ALU_result;
-        // printf("MEM TO ID :FORWARDING RT VALUE IS %08X to the register %d\n", ID_EX.rt_value, ID_EX.RT); //DEBUGGING
-        // printf("%08X\n", ID_EX.prev_instruction);
       }
     }
     /*
@@ -877,29 +840,25 @@ void DATA_FORWADING(){
       */
       if(ID_EX.RS == EX_MEM.num_reg_to_write){
         ID_EX.rs_value = EX_MEM.ALU_result;
-        // printf("EX TO ID :FORWARDING RS VALUE IS %08X to the register %d\n", ID_EX.rs_value, ID_EX.RS); //DEBUGGING
-        // printf("%08X\n", ID_EX.prev_instruction);
       }
       /*
       Case 1-B
       */
       if(ID_EX.RT == EX_MEM.num_reg_to_write){
         ID_EX.rt_value = EX_MEM.ALU_result;
-        // printf("EX TO ID : FORWARDING RT VALUE IS %08X to the register %d\n", ID_EX.rt_value, ID_EX.RT); //DEBUGGING
-        // printf("%08X\n", ID_EX.prev_instruction);
       }
     }
     return;
 }
 
 /*
-  TROMM
+  LOAD_USE_CHECKER
   condition - ID/EX.MemRead TRUE and
               1. ID/EX.RegisterRt = IF/ID.RegisterRs
               2. ID/EX.RegisterRt = IF/ID.RegisterRt
 
  */
-void TROMM(){
+void LOAD_USE_CHECKER(){
   // If MEM write is TRUE, LOAD STORE CASE which is just only data forwarding needed not by stalling
   if(mode == 0)
     return;
@@ -926,7 +885,6 @@ void BRANCH_TAKER(){
   else if(EX_MEM.branch_control){
     BRANCH_INDICATOR.prediction = TRUE;
     BRANCH_INDICATOR.taken_address = EX_MEM.EX_pc_num + EX_MEM.immediate_num;
-    // printf("BRANCH CONTROL ON \n THE ADDRESS IS %08X\n", BRANCH_INDICATOR.taken_address);
     return;
   }
   else{
@@ -944,15 +902,24 @@ void print_status(){
   printf("Registers:\n");
   int register_iter;
   for(register_iter = 0; register_iter < 32; register_iter ++){
-    // if(cur_status.cur_reg[register_iter] != 0)
       register_print(register_iter, cur_status.cur_reg[register_iter]);
   }
   if(MEM_WB.MEM_IO_FLAG){
     if(MEM_WB.R_W == 0){ // READ
-      printf("Memory I/O: R %d %04X %02X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data);
+      if(MEM_WB.size_of_IO == 1)
+        printf("Memory I/O: R %d %04X %02X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data);
+      else if(MEM_WB.size_of_IO == 2)
+        printf("Memory I/O: R %d %04X %04X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data);
+      else if(MEM_WB.size_of_IO == 4)
+      printf("Memory I/O: R %d %04X %08X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data);
     }
     if(MEM_WB.R_W == 1){ // WRITE
-      printf("Memory I/O: W %d %04X %02X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val);
+      if(MEM_WB.size_of_IO == 1)
+        printf("Memory I/O: W %d %04X %02X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val);
+      else if(MEM_WB.size_of_IO == 2)
+        printf("Memory I/O: W %d %04X %04X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val);
+      else if(MEM_WB.size_of_IO == 4)
+        printf("Memory I/O: W %d %04X %08X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val);
     }
   }
   else
@@ -978,8 +945,8 @@ void code_execution(int code[], int mode, int c){
       if(ID_EX.jump_control){
         program_counter = ID_EX.jump_address + 1;
         cur_status.cur_PC = program_counter*4;
-        IF_ID.instruction = code[ID_EX.jump_address];
-        IF_ID.IF_pc_num = ID_EX.jump_address + 1;
+        IF_ID.instruction = 0;
+        IF_ID.IF_pc_num = 0;
       }
       else if(BRANCH_INDICATOR.prediction){
         program_counter = BRANCH_INDICATOR.taken_address;
@@ -1007,11 +974,9 @@ void code_execution(int code[], int mode, int c){
       STALL flag on - NO UPDATE
       */
       if(ID_EX.ex_control.stall){
-        // printf("!!! NEED STALL !!!\n");
         cur_status.cur_PC = program_counter*4; // not Updated PC - only valid at stalling.
       }
       if(ID_EX.jump_control){
-        // printf("CYCLE STARTED WITH JUMP ADDRESS %08X\n",ID_EX.jump_address);
         program_counter = ID_EX.jump_address;
         cur_status.cur_PC = program_counter*4;
         IF_ID.instruction = 0;
@@ -1020,14 +985,12 @@ void code_execution(int code[], int mode, int c){
       else if(BRANCH_INDICATOR.prediction){
         program_counter = BRANCH_INDICATOR.taken_address;
         cur_status.cur_PC = program_counter*4;
-        BRANCH_INDICATOR.prediction = FALSE; //  바꾸기 다 쓰고
+        BRANCH_INDICATOR.prediction = FALSE;
       }
       else if(!ID_EX.ex_control.stall && !BRANCH_INDICATOR.prediction && !ID_EX.jump_control){
-        // printf("!!! NEXT PC !!!\n");
         program_counter = IF_ID.IF_pc_num;
         cur_status.cur_PC = program_counter*4; // Updated PC
       }
-      // printf("CYCLE STARTED WITH JUMP ADDRESS %08X\n",program_counter);
       WB();
       MEM();
       EX();
