@@ -6,22 +6,22 @@ $(TARGET): $(SOURCE)
 
 
 Fibtest:	$(TARGET)
-	./$(TARGET) binary/Fibonacci.txt 1000 1 > out-Fibonacci.txt
+	./$(TARGET) binary/Fibonacci.txt 500 1 > out-Fibonacci.txt
 
 Endtest:	$(TARGET)
-	./$(TARGET) binary/End.txt 1000 1 > out-End.txt
+	./$(TARGET) binary/End.txt 100 1 > out-End.txt
 
 Logicaltest:	$(TARGET)
-	./$(TARGET) binary/Logical.txt 1000 1 > out-Logical.txt
+	./$(TARGET) binary/Logical.txt 100 1 > out-Logical.txt
 
 Memorytest:	$(TARGET)
-	./$(TARGET) binary/Memory.txt 1000 1 > out-Memory.txt
+	./$(TARGET) binary/Memory.txt 100 1 > out-Memory.txt
 
 Swaptest:	$(TARGET)
-	./$(TARGET) binary/Swap.txt 1000 1 > out-Swap.txt
+	./$(TARGET) binary/Swap.txt 200 1 > out-Swap.txt
 
 SUtest:	$(TARGET)
-	./$(TARGET) binary/SU.txt 1000 1 > out-SU.txt
+	./$(TARGET) binary/SU.txt 100 1 > out-SU.txt
 
 Sumtest:	$(TARGET)
 	./$(TARGET) binary/Sum.txt 1000 1 > out-Sum.txt

@@ -907,19 +907,19 @@ void print_status(){
   if(MEM_WB.MEM_IO_FLAG){
     if(MEM_WB.R_W == 0){ // READ
       if(MEM_WB.size_of_IO == 1)
-        printf("Memory I/O: R %d %04X %02X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data);
+        printf("Memory I/O: R %d %04X %02X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data & 0x000000FF);
       else if(MEM_WB.size_of_IO == 2)
-        printf("Memory I/O: R %d %04X %04X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data);
+        printf("Memory I/O: R %d %04X %04X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data & 0x0000FFFF);
       else if(MEM_WB.size_of_IO == 4)
-      printf("Memory I/O: R %d %04X %08X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data);
+      printf("Memory I/O: R %d %04X %08X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.mem_data & 0xFFFFFFFF);
     }
     if(MEM_WB.R_W == 1){ // WRITE
       if(MEM_WB.size_of_IO == 1)
-        printf("Memory I/O: W %d %04X %02X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val);
+        printf("Memory I/O: W %d %04X %02X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val & 0x000000FF);
       else if(MEM_WB.size_of_IO == 2)
-        printf("Memory I/O: W %d %04X %04X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val);
+        printf("Memory I/O: W %d %04X %04X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val & 0x0000FFFF);
       else if(MEM_WB.size_of_IO == 4)
-        printf("Memory I/O: W %d %04X %08X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val);
+        printf("Memory I/O: W %d %04X %08X\n\n", MEM_WB.size_of_IO, MEM_WB.mem_address, MEM_WB.write_val & 0xFFFFFFFF);
     }
   }
   else
